@@ -1,0 +1,12 @@
+{
+	"name": "dinu",
+	"description": "Launcher, file manager, one-way terminal, IDE",
+	"targetFileName": "dinu",
+	"targetPath": "bin",
+	"workingDirectory": "bin",
+	"targetType": "executable",
+	"dependencies": {
+		"x11": ">=1.0.1"
+	},
+	"sourcePaths": ["src"]
+}
