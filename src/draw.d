@@ -8,15 +8,15 @@ import
 	x11.Xutil,
 	x11.keysymdef,
 
-	dinu;
+	dinu.xclient;
 
 
-/* See LICENSE file for copyright and license details. */
+alias Color = ulong;
 
-struct ColorSet {
-	ulong foreground;
-	XftColor foreground_xft;
-	ulong background;
+
+struct FontColor {
+	Color id;
+	XftColor id_xft;
 }
 
 struct Font {
@@ -57,8 +57,8 @@ class DrawingContext {
 	}
 
 	void destroy(){
-		freecol(colorNormal);
-		freecol(colorSelected);
+		//freecol(colorNormal);
+		//freecol(colorSelected);
 		//freecol(colorDim);
 
 		if(font.xft_font){
@@ -77,23 +77,23 @@ class DrawingContext {
 			XCloseDisplay(dpy);
 	}
 
-	void drawrect(int x, int y, int w, int h, Bool fill, ulong color){
+	void rect(int[2] pos, int[2] size, ulong color, bool fill=true){
 		XSetForeground(dpy, gc, color);
 		if(fill)
-			XFillRectangle(dpy, canvas, gc, x, y, w, h);
+			XFillRectangle(dpy, canvas, gc, pos[0], pos[1], size[0], size[1]);
 		else
-			XDrawRectangle(dpy, canvas, gc, x, y, w-1, h-1);
+			XDrawRectangle(dpy, canvas, gc, pos[0], pos[1], size[0]-1, size[1]-1);
 	}
 
 
-	void drawtext(int[2] pos, string text, ColorSet col){
+	void text(int[2] pos, string text, FontColor col){
 		int x = pos[0];
 		int y = pos[1];
-		XSetForeground(dpy, gc, col.foreground);
+		XSetForeground(dpy, gc, col.id);
 		if(font.xft_font){
 			if(!xftdraw)
 				throw new Exception("error, xft drawable does not exist");
-			XftDrawStringUtf8(xftdraw, &col.foreground_xft, font.xft_font, x, y, cast(char*)text, cast(int)text.length);
+			XftDrawStringUtf8(xftdraw, &col.id_xft, font.xft_font, x, y, cast(char*)text, cast(int)text.length);
 		}else if(font.set){
 			Xutf8DrawString(dpy, canvas, font.set, gc, x, y, cast(char*)text, cast(int)text.length);
 		}else{
@@ -102,27 +102,27 @@ class DrawingContext {
 		}
 	}
 
-	void freecol(ColorSet col){
-		if(&col.foreground_xft)
-			XftColorFree(dpy, DefaultVisual(dpy, DefaultScreen(dpy)), DefaultColormap(dpy, DefaultScreen(dpy)), &col.foreground_xft);
+	void freecol(FontColor col){
+		if(&col.id_xft)
+			XftColorFree(dpy, DefaultVisual(dpy, DefaultScreen(dpy)), DefaultColormap(dpy, DefaultScreen(dpy)), &col.id_xft);
 	}
 
-	ulong getcolor(string colstr){
+	Color color(string colstr){
 		Colormap cmap = DefaultColormap(dpy, DefaultScreen(dpy));
-		XColor color;
-		if(!XAllocNamedColor(dpy, cmap, cast(char*)colstr, &color, &color))
+		XColor c;
+		if(!XAllocNamedColor(dpy, cmap, cast(char*)colstr, &c, &c))
 			throw new Exception("cannot allocate color '%s'", colstr);
-		return color.pixel;
+		return c.pixel;
 	}
 
-	ColorSet initcolor(string  foreground, string  background){
-		ColorSet col;
-		col.background = getcolor(background);
-		col.foreground = getcolor(foreground);
+	FontColor fontColor(string name){
+		FontColor col;
+		col.id = color(name);
 		if(font.xft_font)
 			if(!XftColorAllocName(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
-				DefaultColormap(dpy, DefaultScreen(dpy)), cast(char*)foreground, &col.foreground_xft))
-				throw new Exception("error, cannot allocate xft font color '%s'", foreground);
+				DefaultColormap(dpy, DefaultScreen(dpy)), cast(char*)name, &col.id_xft)
+				)
+				throw new Exception("error, cannot allocate xft font color '%s'", name);
 		return col;
 	}
 
