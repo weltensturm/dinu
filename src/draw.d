@@ -11,6 +11,9 @@ import
 	dinu.xclient;
 
 
+__gshared:
+
+
 alias Color = ulong;
 
 
@@ -180,6 +183,7 @@ class DrawingContext {
 
 	int textWidth(string text){
 		return cast(int)std.utf.count(text)*font.charWidth;
+		//return actualWidth(text);
 	}
 
 	int actualWidth(string c){

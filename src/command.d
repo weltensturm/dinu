@@ -4,15 +4,21 @@ import
 	std.string,
 	std.process,
 	std.parallelism,
+	std.stdio,
 	dinu.xclient,
 	draw;
+
+
+__gshared:
+
 
 
 interface Part {
 	int draw(int[2] pos);
 	string text();
 	string filterText();
-	bool lessenScore();
+	//bool lessenScore();
+	int score();
 }
 
 interface Command: Part {
@@ -27,7 +33,7 @@ class CommandFile: Command {
 
 	this(string name){
 		this.name = name;
-		color = dc.fontColor(options.colorFile);
+		color = colorFile;
 	}
 
 	override string text(){
@@ -38,17 +44,17 @@ class CommandFile: Command {
 		return name;
 	}
 
-	override bool lessenScore(){
-		return false;
+	override int score(){
+		return 10;
 	}
 
 	override int draw(int[2] pos){
 		dc.text(pos, name, color);
-		return pos[0];
+		return pos[0]+dc.textWidth(name);
 	}
 
 	override void run(string params){
-		spawnCommand(`xdg-open "%s"`.format(name));
+		spawnCommand(`xdg-open %s`.format(name));
 	}
 
 }
@@ -57,8 +63,13 @@ class CommandDir: CommandFile {
 
 	this(string name){
 		super(name);
-		color = dc.fontColor(options.colorDir);
+		color = colorDir;
 	}
+
+	override int score(){
+		return 20;
+	}
+
 
 }
 
@@ -66,11 +77,11 @@ class CommandExec: CommandFile {
 
 	this(string name){
 		super(name);
-		color = dc.fontColor(options.colorExec);
+		color = colorExec;
 	}
 
-	override bool lessenScore(){
-		return true;
+	override int score(){
+		return 1;
 	}
 
 	override void run(string params){
@@ -79,18 +90,44 @@ class CommandExec: CommandFile {
 
 }
 
+class CommandUserExec: CommandFile {
+
+	this(string name){
+		super(name);
+		color = colorUserExec;
+	}
+
+	override int score(){
+		return 1;
+	}
+
+	override void run(string params){
+		spawnCommand("~/.bin/" ~ name ~ params);
+	}
+
+}
+
 class CommandDesktop: CommandFile {
 
 	string exec;
+	FontColor colorHint;
 
 	this(string name, string exec){
 		super(name);
 		this.exec = exec;
-		color = dc.fontColor(options.colorDesktop);
+		color = colorDesktop;
+		colorHint = colorHint;
 	}
 
-	override bool lessenScore(){
-		return true;
+	override int draw(int[2] pos){
+		int r = super.draw(pos);
+		dc.text([r+5, pos[1]], exec, colorHint);
+		return pos[0];
+	}
+
+
+	override int score(){
+		return 1;
 	}
 
 	override string filterText(){
@@ -108,11 +145,17 @@ void spawnCommand(string command){
 	auto dg = {
 		auto pipes = pipeShell(command);
 		task({
-			foreach(line; pipes.stdout.byLine)
-				spawnShell(`notify-send "%s"`.format(line));
+			foreach(line; pipes.stdout.byLine){
+				if(!options.noNotify)
+					spawnShell(`notify-send "%s"`.format(line));
+				writeln(line);
+			}
 		}).executeInNewThread;
-		foreach(line; pipes.stderr.byLine)
-			spawnShell(`notify-send "%s" -u critical`.format(line));
+		foreach(line; pipes.stderr.byLine){
+			if(!options.noNotify)
+				spawnShell(`notify-send "%s" -u critical`.format(line));
+			writeln(line);
+		}
 		pipes.pid.wait;
 	};
 	task(dg).executeInNewThread;

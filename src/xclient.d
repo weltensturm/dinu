@@ -7,6 +7,7 @@ import
 	std.string,
 	std.stdio,
 	std.conv,
+	std.datetime,
 	core.thread,
 	draw,
 	cli,
@@ -28,22 +29,30 @@ FontColor colorText;
 FontColor colorDir;
 FontColor colorFile;
 FontColor colorExec;
+FontColor colorUserExec;
+FontColor colorHint;
+FontColor colorDesktop;
 
 Arguments options;
 
 Launcher launcher;
 
+XClient client;
+
 
 struct Arguments {
 
 	@("-l") int lines = 10; // number of lines in vertical list
-	@("-fn") string font = "Consolas-10";
+	@("-fn") string font = "Consolas-13";
+	@("-n") bool noNotify;
 	@("-nb") string colorBg = "#222222";
-	@("-nf") string colorText = "#bbbbbb";
-	@("-sb") string colorSelected = "#005577";
+	@("-nf") string colorText = "#eeeeee";
+	@("-sb") string colorSelected = "#444444";
+	@("-ch") string colorHint = "#777777";
 	@("-cd") string colorDir = "#aaffaa";
 	@("-cf") string colorFile = "#eeeeee";
 	@("-ce") string colorExec = "#aaaaff";
+	@("-xu") string colorUserExec = "#aaccff";
 	@("-cd") string colorDesktop = "#acacff";
 	@("-c") string configPath = "~/.dinu";
 
@@ -68,9 +77,14 @@ void main(string[] args){
 		colorDir = dc.fontColor(options.colorDir);
 		colorFile = dc.fontColor(options.colorFile);
 		colorExec = dc.fontColor(options.colorExec);
+		colorUserExec = dc.fontColor(options.colorUserExec);
+		colorHint = dc.fontColor(options.colorHint);
+		colorDesktop = dc.fontColor(options.colorDesktop);
+
+		spawnShell("notify-send " ~ options.configPath);
 
 		launcher = new Launcher;
-		auto client = new XClient;
+		client = new XClient;
 		scope(exit)
 			client.destroy;
 		client.grabKeyboard;
@@ -80,6 +94,9 @@ void main(string[] args){
 	}
 }
 
+int em(double mod){
+	return cast(int)(dc.font.height*1.3*mod);
+}
 
 class XClient {
 
@@ -89,6 +106,7 @@ class XClient {
 	Atom utf8;
 	Window windowHandle;
 	int[2] size;
+	
 
 	this(){
 		int screen = DefaultScreen(dc.dpy);
@@ -98,9 +116,9 @@ class XClient {
 		XIM xim;
 		clip = XInternAtom(dc.dpy, "CLIPBOARD",	false);
 		utf8 = XInternAtom(dc.dpy, "UTF8_STRING", false);
-		barHeight = cast(int)(dc.font.height + 4);
-		size[1] = barHeight*options.lines;
+		barHeight = 1.em;
 		size[0] = DisplayWidth(dc.dpy, screen);
+		size[1] = barHeight*(options.lines+1);
 		swa.override_redirect = true;
 		swa.background_pixel = colorBg;
 		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
@@ -134,7 +152,7 @@ class XClient {
 
 		dc.rect([0,0], size, colorBg);
 		int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
-		int paddingHoriz = barHeight/4;
+		int paddingHoriz = 0.2.em;
 		int cwdWidth = dc.textWidth(getcwd);
 
 		// cwd
@@ -151,21 +169,36 @@ class XClient {
 		int offset = dc.textWidth(launcher.finishedPart);
 		// cursor
 		int curpos = textPos[0]+offset + dc.textWidth(launcher.toString[0..launcher.cursor]);
-		dc.rect([curpos, 3], [1, dc.font.height-3], colorText.id);
+		dc.rect([curpos, 0.1.em], [1, 0.9.em], colorText.id);
 
 		// matches
-		foreach(i, match; launcher.matches[0..min($, 9UL)]){
+		size_t section = (launcher.selected)/options.lines;
+		size_t start = section*options.lines;
+		foreach(i, match; launcher.matches[start..min($, start+options.lines)]){
 			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
-			if(i == launcher.selected)
+			if(start+i == launcher.selected)
 				dc.rect([cwdWidth+paddingHoriz*2, cast(int)(i*barHeight+barHeight)], [size[0]-cwdWidth-paddingHoriz*2, barHeight], colorSelected);
 			match.draw(pos);
-			/+
-			auto color = match.color;
-			dc.text(pos, match.text, color);
-			+/
 		}
 
+		if(launcher.matches.length > options.lines){
+			string page = "%s/%s".format(section+1, launcher.matches.length/options.lines+1);
+			dc.text([cwdWidth-dc.textWidth(page), barHeight*options.lines+dc.font.height-1], page, colorHint);
+		}
+
+		if(launcher.loading)
+			dc.text([0.1.em, barHeight*options.lines+dc.font.height-1], "+", colorHint);
+
 		dc.mapdc(windowHandle, size[0], size[1]);
+	}
+
+	void sendUpdate(){
+		if(!dc.dpy || !windowHandle)
+			return;
+		XClientMessageEvent ev;
+		ev.type = ClientMessage;
+		ev.format = 8;
+		XSendEvent(dc.dpy, windowHandle, false, 0, cast(XEvent*)&ev);
 	}
 
 	void handleEvents(){
@@ -201,10 +234,18 @@ class XClient {
 				if(ev.xvisibility.state != VisibilityUnobscured)
 					XRaiseWindow(dc.dpy, windowHandle);
 				break;
+			case ClientMessage:
+				if(lastUpdate < Clock.currSystemTick+50.msecs){
+					launcher.checkReceived;
+					draw;
+				}
+				break;
 			default: break;
 			}
 		}
 	}
+
+	private Duration lastUpdate;
 
 	void onKey(XKeyEvent* ev){
 		char[5] buf;
@@ -263,8 +304,8 @@ class XClient {
 		if(dc.actualWidth(buf[0..length].to!string) > 0){
 			string s = buf[0..length].to!string;
 			launcher.insert(s);
-			if(s == " ")
-				launcher.next;
+			//if(s == " ")
+			//	launcher.next;
 			draw;
 		}
 	}

@@ -21,11 +21,44 @@ import
 	desktop;
 
 
+__gshared:
+
+
+
+string[] getCompletions(string partial){
+	string trigger = "true || %s".format(partial);
+	auto pipes = pipeShell(`echo -e "%s\t\t" | bash -i`.format(trigger));
+	string output;
+	foreach(line; pipes.stderr.byLine)
+		output ~= line ~ '\n';
+	output = output[output.indexOf(trigger)+trigger.length..$];
+	if(output.canFind(trigger))
+		output = output[0..output.indexOf(trigger)];
+	writeln(output);
+	return [output];
+}
+
+
+class LauncherCompleter: Launcher {
+
+	Command[] choices;
+	size_t selected;
+
+	this(){
+		
+	}
+
+	void addCommand(Command c){
+
+	}
+
+}
+
 
 class Launcher {
 
-	Parameter[] params;
-	Parameter currentParam;
+	Picker[] params;
+	Picker currentParam;
 
 	alias currentParam this;
 
@@ -35,12 +68,17 @@ class Launcher {
 
 	void reset(){
 		params = [];
-		params ~= new ParameterLauncher;
+		params ~= new PickerCommand;
 		currentParam = params[0];
 	}
 
+	void checkReceived(){
+		if(currentParam.text.length)
+			currentParam.filter;
+	}
+
 	void next(){
-		params ~= new ParameterArgument;
+		params ~= new PickerPath;
 		currentParam = params[$-1];
 	}
 
@@ -104,7 +142,7 @@ class Launcher {
 }
 
 
-class Parameter {
+class Picker {
 
 	string text;
 	int cursor;
@@ -112,6 +150,8 @@ class Parameter {
 	int selected = -1;
 	Part[] choices;
 	Part[] matches;
+	string[] pathsScanned;
+	bool loading;
 
 	void selectNext(){
 		if(selected < 0){
@@ -126,6 +166,7 @@ class Parameter {
 			text = matches[selected].text;
 		}
 		cursor = cast(int)text.length;
+		filter;
 	}
 
 	void filter(){
@@ -136,6 +177,7 @@ class Parameter {
 		filterText = "";
 		selected = -1;
 		matches = [];
+		//getCompletions(launcher.toString);
 		if(text.length)
 			filter;
 	}
@@ -144,6 +186,8 @@ class Parameter {
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
 		update;
+		if(s == " " && s[$-1] != '\\' || s == "=")
+			launcher.next;
 	}
 
 	void delChar(){
@@ -183,76 +227,117 @@ class Parameter {
 	}
 
 
+	Part[] entries(string dir){
+		if(pathsScanned.canFind(dir.chomp("/")))
+			return [];
+		pathsScanned ~= dir.chomp("/");
+		Part[] content;
+		string cwd = getcwd;
+		foreach(entry; dirEntries(dir.expandTilde, SpanMode.shallow)){
+			bool d = entry.isDir;
+			string path = buildNormalizedPath(dir.chompPrefix(cwd), entry.baseName).replace(" ", "\\ ");
+			if(entry.isDir){
+				content ~= new CommandDir(path);
+			}else
+				content ~= new CommandFile(path);
+		}
+		return content;
+	}
+
+
+
 }
 
 
-class ParameterArgument: Parameter {
+class PickerPath: Picker {
 
 	this(){
-		choices = getcwd.entries;
+		choices = entries(getcwd);
 	}
 
 	override void update(){
-		super.update;
-		choices = getcwd.entries;
 		auto dir = text.expandTilde;
 		if(dir.exists && dir.isDir)
-			choices ~= text.entries;
+			choices ~= entries(text);
+		super.update;
 	}
 
 
 }
 
 
-class ParameterLauncher: Parameter {
-	
+class PickerCommand: Picker {
+
+	CommandLoader commandLoader;
+
 	this(){
-		//task(&readCommands).executeInNewThread;
-		readCommands;
+		//commandLoader = new CommandLoader;
+		synchronized(this)
+			choices = entries(getcwd);
+		loading = true;
+		task(&readCommands).executeInNewThread;
+		//readCommands;
 	}
 
 	override void update(){
-		super.update;
 		auto dir = text.expandTilde;
 		if(dir.exists && dir.isDir)
-			choices ~= text.entries;
+			synchronized(this)
+				choices ~= entries(text);
+		super.update;
 	}
 
 	void readCommands(){
-		choices = getcwd.entries;
 		auto p = pipeShell("compgen -ack -A function", Redirect.stdout);
-		p.pid.wait;
 		auto desktops = getAll;
 		iterexecs:foreach(line; p.stdout.byLine){
 			foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
-				choices ~= new CommandDesktop(match.name, match.exec);
+				addChoice(new CommandDesktop(match.name, match.exec));
 				match.name = "";
 				continue iterexecs;
 			}
-			choices ~= new CommandExec(line.to!string);
+			addChoice(new CommandExec(line.to!string));
 		}
 		foreach(desktop; desktops){
 			if(desktop.name.length)
-				choices ~= new CommandDesktop(desktop.name, desktop.exec);
+				addChoice(new CommandDesktop(desktop.name, desktop.exec));
 		}
-
+		if("~/.bin".expandTilde.exists){
+			foreach(entry; "~/.bin".expandTilde.dirEntries(SpanMode.shallow))
+				addChoice(new CommandUserExec(entry.baseName));
+		}
+		p.pid.wait;
+		loading = false;
+		client.sendUpdate;
 	}
+
+	void addChoice(Part part){
+		synchronized(this)
+			choices ~= part;
+		if(!(choices.length % 10))
+			client.sendUpdate;
+		//Thread.sleep(5.msecs);
+	}
+
 }
 
 
-Part[] entries(string dir){
-	Part[] content;
-	dir = dir.expandTilde;
-	string cwd = getcwd;
-	foreach(entry; dirEntries(dir, SpanMode.shallow)){
-		bool d = entry.isDir;
-		string prefix = dir.chompPrefix(cwd).chomp("/");
-		if(entry.isDir)
-			content ~= new CommandDir(prefix ~ (prefix.length ? "/" : "") ~ entry.baseName);
-		else
-			content ~= new CommandFile(prefix ~ (prefix.length ? "/" : "") ~ entry.baseName);
+synchronized class CommandLoader {
+
+	bool loading = true;
+
+	this(){
+
 	}
-	return content;
+
+	void findAll(){
+
+		loading = false;
+	}
+
+	void foundSomething(){
+	}
+
 }
 
 
@@ -262,33 +347,33 @@ Part[] filter(Part[] what, string with_){
 		Part part;
 	}
 	Match[] matches;
-	iter:foreach(entry; what){
+	foreach(entry; what){
 		Match match;
 		int textIndex;
-		int scoreMul = 10;
+		int scoreMul = entry.score;
 		foreach(c; entry.filterText){
 			if(textIndex < with_.length && with_[textIndex].toLower == c.toLower){
 				scoreMul *= (with_[textIndex] != c ? 2 : 4);
 				textIndex++;
 				match.score += scoreMul;
 			}else
-				scoreMul = 10;
+				scoreMul = entry.score;
 		}
-		if(textIndex == with_.length){
+		if(textIndex == with_.length && with_.length){
 			match.part = entry;
 			size_t distance = entry.filterText.levenshteinDistance(with_);
 			match.score -= distance;
-			if(entry.lessenScore && distance){
-				match.score /= 10;
-				match.score -= 10;
-			}
+			if(!distance)
+				match.score += 100000;
+			match.score -= (entry.filterText[0]-with_[0]);
 			matches ~= match;
 		}
 	}
-	matches.sort!((a,b) => a.score-b.score>0);
+	matches.sort!((a,b) => a.score>b.score);
 	Part[] parts;
-	foreach(r; matches)
+	foreach(r; matches){
 		parts ~= r.part;
+	}
 	return parts;
 }
 
