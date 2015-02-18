@@ -1,10 +1,12 @@
 module dinu.command;
 
 import
+	core.sync.mutex,
 	std.string,
 	std.process,
 	std.parallelism,
 	std.stdio,
+	std.file,
 	dinu.xclient,
 	draw;
 
@@ -12,17 +14,24 @@ import
 __gshared:
 
 
+enum Type {
 
-interface Part {
-	int draw(int[2] pos);
-	string text();
-	string filterText();
-	//bool lessenScore();
-	int score();
+	script,
+	desktop,
+	file,
+	directory
+
 }
 
-interface Command: Part {
-	void run(string params);
+
+class Command {
+	abstract int draw(int[2] pos);
+	abstract string text();
+	abstract string filterText();
+	//bool lessenScore();
+	abstract int score();
+	abstract void run(string params);
+	Type type;
 }
 
 
@@ -33,6 +42,7 @@ class CommandFile: Command {
 
 	this(string name){
 		this.name = name;
+		type = Type.file;
 		color = colorFile;
 	}
 
@@ -45,7 +55,7 @@ class CommandFile: Command {
 	}
 
 	override int score(){
-		return 10;
+		return 0;
 	}
 
 	override int draw(int[2] pos){
@@ -63,11 +73,12 @@ class CommandDir: CommandFile {
 
 	this(string name){
 		super(name);
+		type = Type.directory;
 		color = colorDir;
 	}
 
 	override int score(){
-		return 20;
+		return 2;
 	}
 
 
@@ -77,35 +88,20 @@ class CommandExec: CommandFile {
 
 	this(string name){
 		super(name);
+		type = Type.script;
 		color = colorExec;
 	}
 
 	override int score(){
-		return 1;
+		return 5;
 	}
 
 	override void run(string params){
-		spawnCommand(name ~ params);
+		spawnCommand(name ~ " " ~ params);
 	}
 
 }
 
-class CommandUserExec: CommandFile {
-
-	this(string name){
-		super(name);
-		color = colorUserExec;
-	}
-
-	override int score(){
-		return 1;
-	}
-
-	override void run(string params){
-		spawnCommand("~/.bin/" ~ name ~ params);
-	}
-
-}
 
 class CommandDesktop: CommandFile {
 
@@ -114,9 +110,10 @@ class CommandDesktop: CommandFile {
 
 	this(string name, string exec){
 		super(name);
+		type = Type.desktop;
 		this.exec = exec;
 		color = colorDesktop;
-		colorHint = colorHint;
+		colorHint = dinu.xclient.colorHint;
 	}
 
 	override int draw(int[2] pos){
@@ -127,7 +124,7 @@ class CommandDesktop: CommandFile {
 
 
 	override int score(){
-		return 1;
+		return 100;
 	}
 
 	override string filterText(){
@@ -143,18 +140,23 @@ class CommandDesktop: CommandFile {
 
 void spawnCommand(string command){
 	auto dg = {
+		writeln("Running \"%s\"".format(command));
+		(options.configPath ~ ".history").append(command ~ '\n');
+		auto mutex = new Mutex;
 		auto pipes = pipeShell(command);
 		task({
 			foreach(line; pipes.stdout.byLine){
-				if(!options.noNotify)
-					spawnShell(`notify-send "%s"`.format(line));
-				writeln(line);
+				synchronized(mutex){
+					(options.configPath ~ ".log").append(line ~ '\n');
+					writeln(line);
+				}
 			}
 		}).executeInNewThread;
 		foreach(line; pipes.stderr.byLine){
-			if(!options.noNotify)
-				spawnShell(`notify-send "%s" -u critical`.format(line));
-			writeln(line);
+			synchronized(mutex){
+				(options.configPath ~ ".log").append(line ~ '\n');
+				writeln(line);
+			}
 		}
 		pipes.pid.wait;
 	};

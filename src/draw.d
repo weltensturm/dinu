@@ -3,6 +3,7 @@ module draw;
 import
 	std.string,
 	std.utf,
+	std.algorithm,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
@@ -27,14 +28,13 @@ struct Font {
 	int descent;
 	int height;
 	int width;
-	int charWidth; // monospace ftw;
 	XFontSet set;
 	XFontStruct *xfont;
 	XftFont *xft_font;
 }
 
-auto min(T1,T2: T1)(T1 a, T2 b){ return a < b ? a : b; }
-auto max(T1,T2: T1)(T1 a, T2 b){ return a > b ? a : b; }
+//auto min(T1,T2: T1)(T1 a, T2 b){ return a < b ? a : b; }
+//auto max(T1,T2: T1)(T1 a, T2 b){ return a > b ? a : b; }
 
 
 
@@ -160,7 +160,6 @@ class DrawingContext {
 		if(missing)
 			XFreeStringList(missing);
 		font.height = font.ascent + font.descent;
-		font.charWidth = actualWidth("A") - 3;
 	}
 
 	void mapdc(Window win, uint w, uint h){
@@ -181,16 +180,11 @@ class DrawingContext {
 		}
 	}
 
-	int textWidth(string text){
-		return cast(int)std.utf.count(text)*font.charWidth;
-		//return actualWidth(text);
-	}
-
-	int actualWidth(string c){
+	int textWidth(string c){
 		if(font.xft_font){
 			XGlyphInfo gi;
 			XftTextExtentsUtf8(dpy, font.xft_font, cast(char*)c, cast(int)c.length, &gi);
-			return gi.width;
+			return gi.xOff;
 		}else if(font.set){
 			XRectangle r;
 			Xutf8TextExtents(font.set, cast(char*)c, cast(int)c.length, null, &r);

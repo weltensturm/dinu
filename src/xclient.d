@@ -8,6 +8,7 @@ import
 	std.stdio,
 	std.conv,
 	std.datetime,
+	std.algorithm,
 	core.thread,
 	draw,
 	cli,
@@ -29,7 +30,6 @@ FontColor colorText;
 FontColor colorDir;
 FontColor colorFile;
 FontColor colorExec;
-FontColor colorUserExec;
 FontColor colorHint;
 FontColor colorDesktop;
 
@@ -52,9 +52,8 @@ struct Arguments {
 	@("-cd") string colorDir = "#aaffaa";
 	@("-cf") string colorFile = "#eeeeee";
 	@("-ce") string colorExec = "#aaaaff";
-	@("-xu") string colorUserExec = "#aaccff";
 	@("-cd") string colorDesktop = "#acacff";
-	@("-c") string configPath = "~/.dinu";
+	@("-c") string configPath = "~/.dinu/default";
 
 	mixin cli!Arguments;
 
@@ -77,14 +76,14 @@ void main(string[] args){
 		colorDir = dc.fontColor(options.colorDir);
 		colorFile = dc.fontColor(options.colorFile);
 		colorExec = dc.fontColor(options.colorExec);
-		colorUserExec = dc.fontColor(options.colorUserExec);
 		colorHint = dc.fontColor(options.colorHint);
 		colorDesktop = dc.fontColor(options.colorDesktop);
 
-		spawnShell("notify-send " ~ options.configPath);
+		//spawnShell("notify-send " ~ options.configPath);
 
-		launcher = new Launcher;
 		client = new XClient;
+		launcher = new Launcher;
+		client.draw;
 		scope(exit)
 			client.destroy;
 		client.grabKeyboard;
@@ -138,7 +137,6 @@ class XClient {
 		);
 		XMapRaised(dc.dpy, windowHandle);
 		dc.resizedc(size[0], size[1]);
-		draw;
 	}
 
 	void destroy(){
@@ -148,7 +146,7 @@ class XClient {
 		dc.destroy;
 	}
 
-	void draw(){
+	protected void draw(){
 
 		dc.rect([0,0], size, colorBg);
 		int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
@@ -174,20 +172,21 @@ class XClient {
 		// matches
 		size_t section = (launcher.selected)/options.lines;
 		size_t start = section*options.lines;
-		foreach(i, match; launcher.matches[start..min($, start+options.lines)]){
+		foreach(i, match; choiceFilter.res[start..min($, start+options.lines)]){
 			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
-			if(start+i == launcher.selected)
+			//dc.text([0.1.em, pos[1]], match.score.to!string, colorHint);
+			if(start+i == max(0-cast(long)launcher.params.length, launcher.selected))
 				dc.rect([cwdWidth+paddingHoriz*2, cast(int)(i*barHeight+barHeight)], [size[0]-cwdWidth-paddingHoriz*2, barHeight], colorSelected);
-			match.draw(pos);
+			match.data.draw(pos);
 		}
 
-		if(launcher.matches.length > options.lines){
-			string page = "%s/%s".format(section+1, launcher.matches.length/options.lines+1);
+		if(choiceFilter.res.length > options.lines){
+			string page = "%s/%s".format(section+1, choiceFilter.res.length/options.lines+1);
 			dc.text([cwdWidth-dc.textWidth(page), barHeight*options.lines+dc.font.height-1], page, colorHint);
 		}
 
-		if(launcher.loading)
-			dc.text([0.1.em, barHeight*options.lines+dc.font.height-1], "+", colorHint);
+		//if(commandLoader.loading || cwdLoader.loading)
+		//	dc.text([0.1.em, barHeight*options.lines+dc.font.height-1], "+", colorHint);
 
 		dc.mapdc(windowHandle, size[0], size[1]);
 	}
@@ -195,6 +194,9 @@ class XClient {
 	void sendUpdate(){
 		if(!dc.dpy || !windowHandle)
 			return;
+		if(lastUpdate+10 > Clock.currSystemTick.msecs)
+			return;
+		lastUpdate = Clock.currSystemTick.msecs;
 		XClientMessageEvent ev;
 		ev.type = ClientMessage;
 		ev.format = 8;
@@ -235,17 +237,14 @@ class XClient {
 					XRaiseWindow(dc.dpy, windowHandle);
 				break;
 			case ClientMessage:
-				if(lastUpdate < Clock.currSystemTick+50.msecs){
-					launcher.checkReceived;
-					draw;
-				}
+				draw;
 				break;
 			default: break;
 			}
 		}
 	}
 
-	private Duration lastUpdate;
+	private long lastUpdate;
 
 	void onKey(XKeyEvent* ev){
 		char[5] buf;
@@ -294,6 +293,9 @@ class XClient {
 			case XK_Tab:
 				launcher.selectNext;
 				return;
+			case XK_ISO_Left_Tab:
+				launcher.selectPrev;
+				return;
 			case XK_Return:
 			case XK_KP_Enter:
 				launcher.run;
@@ -301,7 +303,7 @@ class XClient {
 			default:
 				break;
 		}
-		if(dc.actualWidth(buf[0..length].to!string) > 0){
+		if(dc.textWidth(buf[0..length].to!string) > 0){
 			string s = buf[0..length].to!string;
 			launcher.insert(s);
 			//if(s == " ")

@@ -1,0 +1,7 @@
+.dub/
+.project
+.buildpath
+dub.selections.json
+*.swp
+*.swo
+bin/
