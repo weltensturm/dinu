@@ -394,8 +394,9 @@ class ChoiceFilter {
 			if(typeFilter == "@" && p.type != Type.file && p.type != Type.directory)
 				return;
 			Match match;
-			match.score = p.filterText.cmpFuzzy(filter)+p.score;
+			match.score = p.filterText.cmpFuzzy(filter);
 			if(match.score > 0){
+				match.score += p.score;
 				match.data = p;
 				synchronized(this){
 					foreach(i, e; matches){

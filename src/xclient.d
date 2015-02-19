@@ -2,6 +2,7 @@ module dinu.xclient;
 
 import
 	std.path,
+	std.math,
 	std.process,
 	std.file,
 	std.string,
@@ -147,6 +148,10 @@ class XClient {
 	}
 
 	protected void draw(){
+		
+		assert(thread_isMainThread);
+
+		auto matches = choiceFilter.res;
 
 		dc.rect([0,0], size, colorBg);
 		int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
@@ -172,7 +177,7 @@ class XClient {
 		// matches
 		size_t section = (launcher.selected)/options.lines;
 		size_t start = section*options.lines;
-		foreach(i, match; choiceFilter.res[start..min($, start+options.lines)]){
+		foreach(i, match; matches[start..min($, start+options.lines)]){
 			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
 			//dc.text([0.1.em, pos[1]], match.score.to!string, colorHint);
 			if(start+i == max(0-cast(long)launcher.params.length, launcher.selected))
@@ -180,13 +185,9 @@ class XClient {
 			match.data.draw(pos);
 		}
 
-		if(choiceFilter.res.length > options.lines){
-			string page = "%s/%s".format(section+1, choiceFilter.res.length/options.lines+1);
-			dc.text([cwdWidth-dc.textWidth(page), barHeight*options.lines+dc.font.height-1], page, colorHint);
-		}
-
-		//if(commandLoader.loading || cwdLoader.loading)
-		//	dc.text([0.1.em, barHeight*options.lines+dc.font.height-1], "+", colorHint);
+		double scrollbarHeight = max(2.0, barHeight*10.0/max(1.0, matches.length.log2)*2);
+		int scrollbarOffset = cast(int)((barHeight*10.0 - scrollbarHeight)*launcher.selected/(max(1.0, matches.length))) + 1;
+		dc.rect([0, barHeight+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
 
 		dc.mapdc(windowHandle, size[0], size[1]);
 	}
@@ -201,6 +202,7 @@ class XClient {
 		ev.type = ClientMessage;
 		ev.format = 8;
 		XSendEvent(dc.dpy, windowHandle, false, 0, cast(XEvent*)&ev);
+		XFlush(dc.dpy);
 	}
 
 	void handleEvents(){
