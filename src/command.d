@@ -5,6 +5,8 @@ import
 	std.string,
 	std.process,
 	std.parallelism,
+	std.algorithm,
+	std.array,
 	std.stdio,
 	std.file,
 	dinu.xclient,
@@ -132,7 +134,7 @@ class CommandDesktop: CommandFile {
 	}
 
 	override void run(string params){
-		spawnCommand(exec);
+		spawnCommand(exec.replace("%f", params).replace("%F", params).replace("%u", params).replace("%U", params));
 	}
 
 }
@@ -140,26 +142,43 @@ class CommandDesktop: CommandFile {
 
 void spawnCommand(string command){
 	auto dg = {
-		writeln("Running \"%s\"".format(command));
-		(options.configPath ~ ".history").append(command ~ '\n');
-		auto mutex = new Mutex;
-		auto pipes = pipeShell(command);
-		task({
-			foreach(line; pipes.stdout.byLine){
-				synchronized(mutex){
-					(options.configPath ~ ".log").append(line ~ '\n');
-					writeln(line);
-				}
-			}
-		}).executeInNewThread;
-		foreach(line; pipes.stderr.byLine){
-			synchronized(mutex){
-				(options.configPath ~ ".log").append(line ~ '\n');
-				writeln(line);
-			}
-		}
-		pipes.pid.wait;
+		try{
+			writeln("Running \"%s\"".format(command));
+			auto history = options.configPath ~ ".history";
+			if(history.exists)
+				(options.configPath ~ ".history").append(command ~ '\n');
+			else
+				std.file.write(history, command ~ '\n');
+			auto mutex = new Mutex;
+			auto pipes = pipeShell(command);
+			task({
+				foreach(line; pipes.stdout.byLine)
+					log(line ~ '\n');
+			}).executeInNewThread;
+			foreach(line; pipes.stderr.byLine)
+				log(line ~ '\n');
+			pipes.pid.wait;
+		}catch(Throwable t)
+			writeln(t);
 	};
 	task(dg).executeInNewThread;
+}
+
+
+Mutex logMutex;
+
+shared static this(){
+	logMutex = new Mutex;
+}
+
+void log(char[] text){
+	synchronized(logMutex){
+		auto path = options.configPath ~ ".log";
+		if(path.exists)
+			path.append(text);
+		else
+			std.file.write(path, text);
+		writeln(text);
+	}
 }
 
