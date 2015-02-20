@@ -127,7 +127,7 @@ class XClient {
 			DefaultDepth(dc.dpy, screen), CopyFromParent,
 			DefaultVisual(dc.dpy, screen),
 			CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
-		);	XClassHint hint;
+		);
 		XClassHint hint;
 		hint.res_name = cast(char*)"dash";
 		hint.res_class = cast(char*)"Dash";
