@@ -3,6 +3,7 @@ module dinu.command;
 import
 	core.sync.mutex,
 	std.string,
+	std.path,
 	std.process,
 	std.parallelism,
 	std.algorithm,
@@ -143,10 +144,11 @@ class CommandDesktop: CommandFile {
 void spawnCommand(string command){
 	auto dg = {
 		try{
+			auto userdir = options.configPath.expandTilde;
 			writeln("Running \"%s\"".format(command));
-			auto history = options.configPath ~ ".history";
+			auto history = userdir ~ ".history";
 			if(history.exists)
-				(options.configPath ~ ".history").append(command ~ '\n');
+				history.append(command ~ '\n');
 			else
 				std.file.write(history, command ~ '\n');
 			auto mutex = new Mutex;
@@ -173,7 +175,7 @@ shared static this(){
 
 void log(char[] text){
 	synchronized(logMutex){
-		auto path = options.configPath ~ ".log";
+		auto path = options.configPath.expandTilde ~ ".log";
 		if(path.exists)
 			path.append(text);
 		else

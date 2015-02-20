@@ -127,7 +127,7 @@ class Launcher {
 class Picker {
 
 	string text;
-	long cursor;
+	size_t cursor;
 	string filterText;
 	long selected;
 
@@ -144,11 +144,11 @@ class Picker {
 		if(selected >= res.length)
 			selected = -1;
 		else if(selected < -1)
-			selected = cast(long)res.length-1;
+			selected = res.length-1L;
 		if(selected != -1){
 			if(!filterText.length)
 				filterText = text;
-			text = res[selected].data.text;
+			text = res[cast(size_t)selected].data.text;
 		}else if(filterText.length){
 			text = filterText;
 			filterText = "";
@@ -158,12 +158,12 @@ class Picker {
 
 	void selectNext(){
 		setSelected(selected+1);
-		cursor = cast(int)text.length;
+		cursor = text.length;
 	}
 
 	void selectPrev(){
 		setSelected(selected-1);
-		cursor = cast(int)text.length;
+		cursor = text.length;
 	}
 
 	void update(){
@@ -244,9 +244,13 @@ class CommandPicker: Picker {
 		setSelected(0);
 	}
 
+	override void update(){
+		setSelected(0);
+	}
+
 	override protected void finishPart(){
 		choiceFilter.wait;
-		command = choiceFilter.res[selected<0 ? 0 : selected].data;
+		command = choiceFilter.res[selected<0 ? 0 : cast(size_t)selected].data;
 		text = command.text ~ ' ';
 		cursor = text.length;
 		launcher.next;
@@ -257,7 +261,7 @@ class CommandPicker: Picker {
 		if(selected >= res.length)
 			selected = 0;
 		else if(selected < 0)
-			selected = cast(int)res.length-1;
+			selected = res.length-1L;
 		this.selected = selected;
 	}
 
@@ -310,11 +314,6 @@ class ChoiceFilter {
 			Thread.sleep(10.msecs);
 		idle = false;
 		writeln("done");
-		//writeln(matches);
-		foreach(m; all){
-			if(m.text == "cd")
-				writeln(m.text);
-		}
 		idle = true;
 	}
 
@@ -511,7 +510,7 @@ string[] dirContent(string dir, int depth=int.max){
 long cmpFuzzy(string str, string sub){
 	long scoreMul = 100;
 	long score = scoreMul*10;
-	long curIdx;
+	size_t curIdx;
 	long largestScore;
 	foreach(i, c; str){
 		if(curIdx<sub.length && c.toLower == sub[curIdx].toLower){
@@ -556,109 +555,4 @@ unittest {
 	assert("asbsdf".cmpFuzzy("asdf") > "absdf".cmpFuzzy("asdf"));
 	assert("dlist-edgeflag-dangling".cmpFuzzy("pidgin") == 0);
 }
-
-/+
-class Filter {
-
-	struct Match {
-		size_t score;
-		Part data;
-	}
-
-	protected string filter;
-	protected Match[] found;
-	protected Thread filterThread;
-	protected bool restart;
-
-	void filter(Part[] haystack, string needle){
-		if(filterThread){
-			restart = true;
-			filterThread.join;
-			restart = false;
-			found = [];
-		}
-		filterThread = new Thread({filterFun(haystack, needle);});
-		filterThread.start;
-	}
-
-	Match[] matches(){
-		synchronized(this)
-			return found;
-	}
-
-
-	void filterText(string text){
-
-	}
-
-	protected void filterFun(Part[] haystack, string needle){
-		foreach(hay; haystack){
-			addChoice(hay);
-			if(restart)
-				return;
-		}
-	}
-
-	void addChoice(Part data){
-		Match match;
-		match.score = data.text.cmpFuzzy(needle)*data.score;
-		if(match.score > 0){
-			match.data = hay;
-			if(!found.length)
-				synchronized(this)
-					found ~= match;
-			else
-				foreach(i, e; found){
-					if(e.score < match.score || i == found.length-1){
-						synchronized(this)
-							found = found[0..i] ~ match ~ found[i..$];
-						writeln(match.score, ' ', match.data.text);
-						break;
-					}
-				}
-		}
-	}
-
-	/+
-	void filter(Part[] what, string with_){
-		struct Match {
-			int score;
-			Part part;
-		}
-		foreach(entry; what){
-			Match match;
-			int textIndex;
-			int scoreMul = entry.score;
-			foreach(c; entry.filterText){
-				if(textIndex < with_.length && with_[textIndex].toLower == c.toLower){
-					scoreMul *= (with_[textIndex] != c ? 2 : 4);
-					textIndex++;
-					match.score += scoreMul;
-				}else
-					scoreMul = entry.score;
-			}
-			if(textIndex == with_.length && with_.length){
-				match.part = entry;
-				size_t distance = entry.filterText.levenshteinDistance(with_);
-				match.score -= distance*2;
-				if(!distance)
-					match.score += 100000;
-				//match.score -= abs(entry.filterText[0]-with_[0]);
-				found ~= match;
-			}
-		}
-		matches.sort!((a,b) => a.score>b.score);
-		Part[] parts;
-		foreach(r; matches){
-			parts ~= r.part;
-		}
-		return parts;
-	}
-	+/
-
-}
-
-
-+/
-
 

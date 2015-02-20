@@ -7,18 +7,22 @@ Launcher, file manager, one-way terminal, IDE
 
 compiling
 ---------
-Just run `dub` in the base dir and see what happens. 
+Just run `dub` in the base dir and see what happens.
+
+requires
+--------
+* dub
+* a sane D compiler
+* X
+* Xft
 
 usage
 -----
-* bind to Mod1+d (or any other very important combination)
-* Launch program: just enter the its name
-* Change directory: run `cd "path"`
-* Open file: enter file path relative to current directory
+* Enter name of files or programs to search for them
+* Press tab to select the next list entry
+* Press enter to execute selection
+* Run `cd "path"` to change directory
+* Press <Escape> or <C-Q> to quit
 
-keys
-----
-* Tab: select next prediction
-* Ctrl+Q/Escape: quit
 
 

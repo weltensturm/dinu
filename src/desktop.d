@@ -8,8 +8,9 @@ import
 
 
 const string[] desktopPaths = [
-	"/usr/share/applications/",
-	"~/.local/share/applications/"
+	"/usr",
+	"/usr/local",
+	"~/.local"
 ];
 
 
@@ -38,8 +39,9 @@ class DesktopEntry {
 DesktopEntry[] getAll(){
 	DesktopEntry[] result;
 	foreach(path; desktopPaths){
-		foreach(entry; path.expandTilde.dirEntries(SpanMode.shallow))
-			result ~= new DesktopEntry(entry);
+		if((path.expandTilde~"/share/applications").exists)
+			foreach(entry; (path.expandTilde~"/share/applications").dirEntries(SpanMode.shallow))
+				result ~= new DesktopEntry(entry);
 	}
 	return result;
 }

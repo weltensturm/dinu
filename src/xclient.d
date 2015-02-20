@@ -128,6 +128,7 @@ class XClient {
 			DefaultVisual(dc.dpy, screen),
 			CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
 		);	XClassHint hint;
+		XClassHint hint;
 		hint.res_name = cast(char*)"dash";
 		hint.res_class = cast(char*)"Dash";
 		XSetClassHint(dc.dpy, windowHandle, &hint);
@@ -175,7 +176,8 @@ class XClient {
 		dc.rect([curpos, 0.1.em], [1, 0.9.em], colorText.id);
 
 		// matches
-		size_t section = (launcher.selected)/options.lines;
+		size_t section = cast(size_t)(launcher.selected/options.lines);
+		assert(section <= matches.length/options.lines, "%s".format(section));
 		size_t start = section*options.lines;
 		foreach(i, match; matches[start..min($, start+options.lines)]){
 			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
@@ -223,7 +225,7 @@ class XClient {
 				if(ev.xselection.property == utf8){
 					char* p;
 					int actualFormat;
-					ulong count;
+					size_t count;
 					Atom actualType;
 					XGetWindowProperty(
 						dc.dpy, windowHandle, utf8, 0, 1024, false, utf8,

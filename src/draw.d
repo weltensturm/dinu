@@ -15,7 +15,7 @@ import
 __gshared:
 
 
-alias Color = ulong;
+alias Color = size_t;
 
 
 struct FontColor {
@@ -80,7 +80,7 @@ class DrawingContext {
 			XCloseDisplay(dpy);
 	}
 
-	void rect(int[2] pos, int[2] size, ulong color, bool fill=true){
+	void rect(int[2] pos, int[2] size, Color color, bool fill=true){
 		XSetForeground(dpy, gc, color);
 		if(fill)
 			XFillRectangle(dpy, canvas, gc, pos[0], pos[1], size[0], size[1]);
