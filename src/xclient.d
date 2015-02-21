@@ -44,7 +44,7 @@ XClient client;
 struct Arguments {
 
 	@("-l") int lines = 10; // number of lines in vertical list
-	@("-fn") string font = "Consolas-13";
+	@("-fn") string font = "Monospace-10";
 	@("-n") bool noNotify;
 	@("-nb") string colorBg = "#222222";
 	@("-nf") string colorText = "#eeeeee";
@@ -65,8 +65,11 @@ void main(string[] args){
 	try {
 		XInitThreads();
 		options = Arguments(args);
-		environment["DE"] = "gnome";
-		if(options.configPath.expandTilde.exists)
+		//environment["DE"] = "gnome";
+		options.configPath = options.configPath.expandTilde;
+		if(!options.configPath.dirName.exists)
+			mkdirRecurse(options.configPath.dirName);
+		if(options.configPath.exists)
 			chdir(options.configPath.expandTilde.readText.strip);
 
 		dc = new DrawingContext;
@@ -195,7 +198,7 @@ class XClient {
 	}
 
 	void sendUpdate(){
-		if(!dc.dpy || !windowHandle)
+		if(!dc.dpy || !windowHandle || !running)
 			return;
 		if(lastUpdate+10 > Clock.currSystemTick.msecs)
 			return;

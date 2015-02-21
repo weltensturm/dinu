@@ -67,7 +67,7 @@ class CommandFile: Command {
 	}
 
 	override void run(string params){
-		spawnCommand(`xdg-open %s`.format(name));
+		spawnCommand(`xdg-open %s || exo-open %s`.format(name,name));
 	}
 
 }
