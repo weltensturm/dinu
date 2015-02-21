@@ -28,6 +28,7 @@ DrawingContext dc;
 Color colorBg;
 Color colorSelected;
 FontColor colorText;
+FontColor colorError;
 FontColor colorDir;
 FontColor colorFile;
 FontColor colorExec;
@@ -48,6 +49,7 @@ struct Arguments {
 	@("-n") bool noNotify;
 	@("-nb") string colorBg = "#222222";
 	@("-nf") string colorText = "#eeeeee";
+	@("-ce") string colorError = "#ff7777";
 	@("-sb") string colorSelected = "#444444";
 	@("-ch") string colorHint = "#777777";
 	@("-cd") string colorDir = "#aaffaa";
@@ -77,6 +79,7 @@ void main(string[] args){
 		colorBg = dc.color(options.colorBg);
 		colorSelected = dc.color(options.colorSelected);
 		colorText = dc.fontColor(options.colorText);
+		colorError = dc.fontColor(options.colorError);
 		colorDir = dc.fontColor(options.colorDir);
 		colorFile = dc.fontColor(options.colorFile);
 		colorExec = dc.fontColor(options.colorExec);
