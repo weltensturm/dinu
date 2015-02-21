@@ -19,10 +19,13 @@ __gshared:
 
 enum Type {
 
-	script,
-	desktop,
-	file,
-	directory
+	none =         0,
+	script =    1<<0,
+	desktop =   1<<1,
+	history =   1<<2,
+	file =      1<<3,
+	directory = 1<<4,
+	output =    1<<5
 
 }
 
@@ -105,6 +108,47 @@ class CommandExec: CommandFile {
 
 }
 
+class CommandHistory: CommandExec {
+
+	size_t idx;
+
+	this(string name, size_t idx){
+		super(name);
+		type = Type.history;
+		this.idx = idx;
+	}
+
+	override int score(){
+		return idx*1000;
+	}
+
+}
+
+class CommandOutput: CommandExec {
+	
+	size_t idx;
+	string output;
+
+	this(string command, string output, size_t idx, bool err){
+		super(command);
+		type = Type.output;
+		this.output = output;
+		this.idx = idx;
+		color = err ? colorError : colorText;
+	}
+
+	override int score(){
+		return idx*1000;
+	}
+
+	override int draw(int[2] pos){
+		dc.text(pos, text, colorHint);
+		pos[0] += dc.textWidth(text);
+		dc.text(pos, output, color);
+		return pos[0];
+	}
+
+}
 
 class CommandDesktop: CommandFile {
 
@@ -144,6 +188,7 @@ class CommandDesktop: CommandFile {
 void spawnCommand(string command){
 	auto dg = {
 		try{
+			command = command.strip;
 			auto userdir = options.configPath.expandTilde;
 			writeln("Running \"%s\"".format(command));
 			auto history = userdir ~ ".history";
@@ -155,10 +200,10 @@ void spawnCommand(string command){
 			auto pipes = pipeShell(command);
 			task({
 				foreach(line; pipes.stdout.byLine)
-					log(line ~ '\n');
+					log("[%s] %s".format(command, line));
 			}).executeInNewThread;
 			foreach(line; pipes.stderr.byLine)
-				log(line ~ '\n');
+				log("ERR [%s] %s".format(command, line));
 			pipes.pid.wait;
 		}catch(Throwable t)
 			writeln(t);
@@ -173,13 +218,13 @@ shared static this(){
 	logMutex = new Mutex;
 }
 
-void log(char[] text){
+void log(string text){
 	synchronized(logMutex){
-		auto path = options.configPath.expandTilde ~ ".log";
+		auto path = options.configPath ~ ".log";
 		if(path.exists)
-			path.append(text);
+			path.append(text ~ '\n');
 		else
-			std.file.write(path, text);
+			std.file.write(path, text ~ '\n');
 		writeln(text);
 	}
 }

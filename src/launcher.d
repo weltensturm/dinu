@@ -290,21 +290,24 @@ class ChoiceFilter {
 		bool restart;
 		bool idle = true;
 
-		string typeFilter;
+		Type typeFilter;
 
 	}
 
 	this(){
 		auto taskExes = task(&loadExecutables, &addChoice);
 		auto taskFiles = task(&loadFiles, getcwd, &addChoice);
+		auto taskOutput = task(&loadOutput, &addChoice);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
+		taskOutput.executeInNewThread;
 		waitLoad = {
 			while(!taskExes.done || !taskFiles.done)
 				Thread.sleep(10.msecs);
 		};
 		filterThread = new Thread(&filterLoop);
 		filterThread.start;
+		reset("");
 	}
 
 	void wait(){
@@ -318,11 +321,13 @@ class ChoiceFilter {
 	}
 
 	void reset(string filter){
-		if(filter.startsWith("!", "@")){
-			typeFilter = ""~filter[0];
-			filter = filter[1..$];
-		}else
-			typeFilter = "";
+		if(!filter.length && (!launcher || !launcher.params.length)){
+			typeFilter = Type.output;
+		}else{
+			typeFilter = Type.file | Type.directory;
+			if(launcher && !launcher.params.length)
+				typeFilter = typeFilter | Type.script | Type.desktop;
+		}
 		restart = true;
 		synchronized(this){
 			narrowQueue = "";
@@ -388,9 +393,7 @@ class ChoiceFilter {
 		}
 
 		void tryMatch(Command p){
-			if(typeFilter == "!" && p.type != Type.desktop && p.type != Type.script)
-				return;
-			if(typeFilter == "@" && p.type != Type.file && p.type != Type.directory)
+			if(typeFilter && !(p.type & typeFilter))
 				return;
 			Match match;
 			match.score = p.filterText.cmpFuzzy(filter);
@@ -445,6 +448,11 @@ class ChoiceFilter {
 void loadExecutables(void delegate(Command) addChoice){
 	auto p = pipeShell("compgen -ack -A function", Redirect.stdout);
 	auto desktops = getAll;
+	if((options.configPath ~ ".history").exists){
+		size_t idx;
+		foreach(line; (options.configPath ~ ".history").readText.splitLines.uniq)
+			addChoice(new CommandHistory(line, idx++));
+	}
 	iterexecs:foreach(line; p.stdout.byLine){
 		foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
 			addChoice(new CommandDesktop(match.name, match.exec));
@@ -487,6 +495,23 @@ void loadFiles(string dir, void delegate(Command) addChoice){
 		}catch(Throwable){}
 	}
 	writeln("done loading dirs");
+}
+
+
+void loadOutput(void delegate(Command) addChoice){
+	auto log = options.configPath ~ ".log";
+	while(!log.exists && (!client || client.running))
+		Thread.sleep(100.msecs);
+	//while(!client || client.running){
+		size_t idx;
+		foreach(line; log.readText.splitLines){
+			if(!line.strip.length)
+				continue;
+			auto command = line[line.countUntil("[")+1 .. line.countUntil("]")];
+			auto text = line[line.countUntil("]")+1 .. $];
+			addChoice(new CommandOutput(command, text, idx++, line.startsWith("ERR ")));
+		}
+	//}
 }
 
 
