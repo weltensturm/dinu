@@ -28,12 +28,14 @@ DrawingContext dc;
 Color colorBg;
 Color colorSelected;
 FontColor colorText;
+FontColor colorOutput;
 FontColor colorError;
 FontColor colorDir;
 FontColor colorFile;
 FontColor colorExec;
 FontColor colorHint;
 FontColor colorDesktop;
+FontColor colorInputBg;
 
 Arguments options;
 
@@ -49,13 +51,15 @@ struct Arguments {
 	@("-n") bool noNotify;
 	@("-nb") string colorBg = "#222222";
 	@("-nf") string colorText = "#eeeeee";
+	@("-co") string colorOutput = "#cccccc";
 	@("-ce") string colorError = "#ff7777";
-	@("-sb") string colorSelected = "#444444";
+	@("-sb") string colorSelected = "#005577";
 	@("-ch") string colorHint = "#777777";
 	@("-cd") string colorDir = "#aaffaa";
 	@("-cf") string colorFile = "#eeeeee";
 	@("-ce") string colorExec = "#aaaaff";
 	@("-cd") string colorDesktop = "#acacff";
+	@("-ci") string colorInputBg = "#333333";
 	@("-c") string configPath = "~/.dinu/default";
 
 	mixin cli!Arguments;
@@ -79,12 +83,14 @@ void main(string[] args){
 		colorBg = dc.color(options.colorBg);
 		colorSelected = dc.color(options.colorSelected);
 		colorText = dc.fontColor(options.colorText);
+		colorOutput = dc.fontColor(options.colorOutput);
 		colorError = dc.fontColor(options.colorError);
 		colorDir = dc.fontColor(options.colorDir);
 		colorFile = dc.fontColor(options.colorFile);
 		colorExec = dc.fontColor(options.colorExec);
 		colorHint = dc.fontColor(options.colorHint);
 		colorDesktop = dc.fontColor(options.colorDesktop);
+		colorInputBg = dc.fontColor(options.colorInputBg);
 
 		//spawnShell("notify-send " ~ options.configPath);
 
@@ -165,8 +171,10 @@ class XClient {
 		int paddingHoriz = 0.2.em;
 		int cwdWidth = dc.textWidth(getcwd);
 
+		dc.rect([cwdWidth+paddingHoriz*2, 0], [size[0]-cwdWidth-paddingHoriz*2, barHeight], colorInputBg.id);
+
 		// cwd
-		dc.rect([0,0], [cwdWidth+paddingHoriz*2, barHeight], colorSelected);
+		//dc.rect([0,0], [cwdWidth+paddingHoriz*2, barHeight], colorSelected);
 		dc.text([paddingHoriz, dc.font.height-1], getcwd, colorText);
 
 		// input
@@ -179,7 +187,7 @@ class XClient {
 		int offset = dc.textWidth(launcher.finishedPart);
 		// cursor
 		int curpos = textPos[0]+offset + dc.textWidth(launcher.toString[0..launcher.cursor]);
-		dc.rect([curpos, 0.1.em], [1, 0.9.em], colorText.id);
+		dc.rect([curpos, 0.1.em], [1, 0.8.em], colorText.id);
 
 		// matches
 		size_t section = cast(size_t)(launcher.selected/options.lines);
@@ -187,15 +195,15 @@ class XClient {
 		size_t start = section*options.lines;
 		foreach(i, match; matches[start..min($, start+options.lines)]){
 			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
-			//dc.text([0.1.em, pos[1]], match.score.to!string, colorHint);
-			if(start+i == max(0-cast(long)launcher.params.length, launcher.selected))
-				dc.rect([cwdWidth+paddingHoriz*2, cast(int)(i*barHeight+barHeight)], [size[0]-cwdWidth-paddingHoriz*2, barHeight], colorSelected);
+			if(start+i == launcher.selected)
+				dc.rect([pos[0]-2, cast(int)(i*barHeight+barHeight)], [size[0]-pos[0]+2, barHeight], colorSelected);
 			match.data.draw(pos);
 		}
 
 		double scrollbarHeight = max(2.0, barHeight*10.0/max(1.0, matches.length.log2)*2);
 		int scrollbarOffset = cast(int)((barHeight*10.0 - scrollbarHeight)*launcher.selected/(max(1.0, matches.length))) + 1;
-		dc.rect([0, barHeight+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
+		dc.rect([textPos[0]+offset-4, barHeight], [2, barHeight*options.lines], colorInputBg.id);
+		dc.rect([textPos[0]+offset-4, barHeight+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
 
 		dc.mapdc(windowHandle, size[0], size[1]);
 	}

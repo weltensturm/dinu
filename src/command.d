@@ -35,7 +35,7 @@ class Command {
 	abstract string text();
 	abstract string filterText();
 	//bool lessenScore();
-	abstract int score();
+	abstract size_t score();
 	abstract void run(string params);
 	Type type;
 }
@@ -60,7 +60,7 @@ class CommandFile: Command {
 		return name;
 	}
 
-	override int score(){
+	override size_t score(){
 		return 0;
 	}
 
@@ -70,7 +70,7 @@ class CommandFile: Command {
 	}
 
 	override void run(string params){
-		spawnCommand(`xdg-open %s || exo-open %s`.format(name,name));
+		spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
 	}
 
 }
@@ -83,7 +83,7 @@ class CommandDir: CommandFile {
 		color = colorDir;
 	}
 
-	override int score(){
+	override size_t score(){
 		return 2;
 	}
 
@@ -98,7 +98,7 @@ class CommandExec: CommandFile {
 		color = colorExec;
 	}
 
-	override int score(){
+	override size_t score(){
 		return 5;
 	}
 
@@ -118,7 +118,7 @@ class CommandHistory: CommandExec {
 		this.idx = idx;
 	}
 
-	override int score(){
+	override size_t score(){
 		return idx*1000;
 	}
 
@@ -134,10 +134,10 @@ class CommandOutput: CommandExec {
 		type = Type.output;
 		this.output = output;
 		this.idx = idx;
-		color = err ? colorError : colorText;
+		color = err ? colorError : colorOutput;
 	}
 
-	override int score(){
+	override size_t score(){
 		return idx*1000;
 	}
 
@@ -170,7 +170,7 @@ class CommandDesktop: CommandFile {
 	}
 
 
-	override int score(){
+	override size_t score(){
 		return 100;
 	}
 
@@ -191,11 +191,14 @@ void spawnCommand(string command){
 			command = command.strip;
 			auto userdir = options.configPath.expandTilde;
 			writeln("Running \"%s\"".format(command));
+			/+
 			auto history = userdir ~ ".history";
 			if(history.exists)
 				history.append(command ~ '\n');
 			else
 				std.file.write(history, command ~ '\n');
+			+/
+			log("[%s executing]".format(command));
 			auto mutex = new Mutex;
 			auto pipes = pipeShell(command);
 			task({

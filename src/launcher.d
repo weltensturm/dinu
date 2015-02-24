@@ -20,8 +20,8 @@ import
 	draw,
 	cli,
 	dinu.xclient,
-	dinu.command,
-	desktop;
+	dinu.content,
+	dinu.command;
 
 
 __gshared:
@@ -59,9 +59,10 @@ class Launcher {
 
 	void reset(){
 		choiceFilter = new ChoiceFilter;
-		command = new CommandPicker;
 		params = [];
+		command = new CommandPicker;
 		currentParam = command;
+		choiceFilter.reset("");
 	}
 
 	void next(){
@@ -85,6 +86,10 @@ class Launcher {
 			std.file.write(options.configPath.expandTilde, getcwd);
 			reset;
 			return;
+		}else if(toString.strip == "clear"){
+			std.file.write(options.configPath ~ ".log", "");
+			reset;
+			return;
 		}else if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
 		}
@@ -92,27 +97,31 @@ class Launcher {
 	}
 
 	void delBackChar(){
-		if(!currentParam.text.length && params.length>1){
-			params = params[0..$-1];
-			currentParam = params[$-1];
+		if(!currentParam.text.length){
+			if(params.length>1){
+				params = params[0..$-1];
+				currentParam = params[$-1];
+			}else{
+				params = [];
+				currentParam = command;
+			}
 		}
 		currentParam.delBackChar;
 	}
 
 	void deleteLeft(){
-		if(!currentParam.text.length && params.length>1){
-			params = params[0..$-1];
-			currentParam = params[$-1];
-		}
-		currentParam.deleteLeft;
-		if(!currentParam)
-			command.deleteLeft;
+		reset;
 	}
 
 	void deleteWordLeft(){
-		if(!currentParam.text.length && params.length>1){
-			params = params[0..$-1];
-			currentParam = params[$-1];
+		if(!currentParam.text.length){
+			if(params.length>1){
+				params = params[0..$-1];
+				currentParam = params[$-1];
+			}else{
+				params = [];
+				currentParam = command;
+			}
 		}
 		currentParam.deleteWordLeft;
 	}
@@ -208,11 +217,13 @@ class Picker {
 		onDel;
 	}
 
+	/+
 	void deleteLeft(){
 		text = text[cursor..$];
 		cursor = 0;
 		onDel;
 	}
+	+/
 
 	void deleteWordLeft(){
 		if(!text.length)
@@ -241,7 +252,7 @@ class CommandPicker: Picker {
 	Command command;
 
 	this(){
-		setSelected(0);
+		setSelected(-1);
 	}
 
 	override void update(){
@@ -258,9 +269,9 @@ class CommandPicker: Picker {
 
 	override protected void setSelected(long selected){
 		auto res = choiceFilter.res;
-		if(selected >= res.length)
+		if(selected >= cast(long)res.length)
 			selected = 0;
-		else if(selected < 0)
+		else if(selected < (text.length ? 0 : -1))
 			selected = res.length-1L;
 		this.selected = selected;
 	}
@@ -292,10 +303,13 @@ class ChoiceFilter {
 
 		Type typeFilter;
 
+		string[] scannedDirs;
+
 	}
 
 	this(){
 		auto taskExes = task(&loadExecutables, &addChoice);
+		scannedDirs ~= getcwd;
 		auto taskFiles = task(&loadFiles, getcwd, &addChoice);
 		auto taskOutput = task(&loadOutput, &addChoice);
 		taskExes.executeInNewThread;
@@ -417,7 +431,7 @@ class ChoiceFilter {
 		void filterLoop(){
 			filterThread.isDaemon = true;
 			try{
-				while(true || client.running){
+				while(!client || client.running){
 					if(narrowQueue.length){
 						synchronized(this){
 							writeln("narrow queue ", narrowQueue, " ", typeFilter);
@@ -432,6 +446,12 @@ class ChoiceFilter {
 						restart = false;
 						client.sendUpdate;
 					}else{
+						auto dir = filter.expandTilde.buildNormalizedPath;
+						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
+							writeln(dir);
+							scannedDirs ~= dir;
+							task(&loadFiles, dir, &addChoice);
+						}
 						Thread.sleep(15.msecs);
 						client.sendUpdate;
 					}
@@ -442,93 +462,6 @@ class ChoiceFilter {
 	
 	}
 
-}
-
-
-void loadExecutables(void delegate(Command) addChoice){
-	auto p = pipeShell("compgen -ack -A function", Redirect.stdout);
-	auto desktops = getAll;
-	if((options.configPath ~ ".history").exists){
-		size_t idx;
-		foreach(line; (options.configPath ~ ".history").readText.splitLines.uniq)
-			addChoice(new CommandHistory(line, idx++));
-	}
-	iterexecs:foreach(line; p.stdout.byLine){
-		foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
-			addChoice(new CommandDesktop(match.name, match.exec));
-			match.name = "";
-			continue iterexecs;
-		}
-		addChoice(new CommandExec(line.to!string));
-	}
-	foreach(desktop; desktops){
-		if(desktop.name.length)
-			addChoice(new CommandDesktop(desktop.name, desktop.exec));
-	}
-	p.pid.wait;
-	writeln("done loading executables");
-}
-
-
-string unixClean(string path){
-	return path
-		.replace(" ", "\\ ")
-		.replace("(", "\\(")
-		.replace(")", "\\)");
-}
-
-
-void loadFiles(string dir, void delegate(Command) addChoice){
-	dir = dir.chomp("/") ~ "/";
-	Command[] content;
-	foreach(i, entry; dir.expandTilde.dirContent(3)){
-		string path = buildNormalizedPath(entry.chompPrefix(dir)).unixClean;
-		try{
-			if(entry.isDir){
-				addChoice(new CommandDir(path ~ '/'));
-			}else{
-				auto attr = getAttributes(path);
-				if(attr & (1 + (1<<3)))
-					addChoice(new CommandExec(path));
-				addChoice(new CommandFile(path));
-			}
-		}catch(Throwable){}
-	}
-	writeln("done loading dirs");
-}
-
-
-void loadOutput(void delegate(Command) addChoice){
-	auto log = options.configPath ~ ".log";
-	while(!log.exists && (!client || client.running))
-		Thread.sleep(100.msecs);
-	//while(!client || client.running){
-		size_t idx;
-		foreach(line; log.readText.splitLines){
-			if(!line.strip.length)
-				continue;
-			auto command = line[line.countUntil("[")+1 .. line.countUntil("]")];
-			auto text = line[line.countUntil("]")+1 .. $];
-			addChoice(new CommandOutput(command, text, idx++, line.startsWith("ERR ")));
-		}
-	//}
-}
-
-
-string[] dirContent(string dir, int depth=int.max){
-	string[] subdirs;
-	string[] res;
-	try{
-		foreach(entry; dir.dirEntries(SpanMode.shallow)){
-			if(entry.isDir && depth)
-				subdirs ~= entry;
-			res ~= entry;
-		}
-	}catch(Throwable e)
-		writeln("bad thing ", e);
-	foreach(subdir; subdirs)
-		res ~= subdir.dirContent(depth-1);
-	return res;
 }
 
 
