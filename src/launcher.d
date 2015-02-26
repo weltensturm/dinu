@@ -78,10 +78,15 @@ class Launcher {
 	}
 
 	void run(){
-		if(!command.command)
+		if(!command.command){
 			command.finishPart;
+			if(!command.text.length){
+				client.running = false;
+				return;
+			}
+		}
 		if(toString.startsWith("cd ")){
-			string cwd = toString[3..$].expandTilde;
+			string cwd = toString[3..$].expandTilde.unixClean;
 			chdir(cwd);
 			std.file.write(options.configPath.expandTilde, getcwd);
 			reset;
@@ -252,6 +257,8 @@ class CommandPicker: Picker {
 	}
 
 	override protected void finishPart(){
+		if(!text.length)
+			return;
 		choiceFilter.wait;
 		command = choiceFilter.res[selected<0 ? 0 : cast(size_t)selected].data;
 		text = command.text ~ ' ';

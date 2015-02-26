@@ -134,7 +134,12 @@ class CommandOutput: CommandExec {
 		type = Type.output;
 		this.command = command;
 		this.idx = idx;
-		color = err ? colorError : (command == "sh" ? colorExec : colorOutput);
+		if(command.startsWith("pid: "))
+			color = colorExec;
+		else if(err)
+			color = colorError;
+		else
+			color = colorOutput;
 	}
 
 	override size_t score(){
@@ -190,21 +195,24 @@ void spawnCommand(string command){
 		try{
 			command = command.strip;
 			auto userdir = options.configPath.expandTilde;
-			writeln("Running \"%s\"".format(command));
-			log("[sh] %s".format(command));
 			auto mutex = new Mutex;
 			auto pipes = pipeShell(command);
-			task({
+			auto id = pipes.pid.processID;
+			log("[pid: %s] %s".format(id, command));
+			auto reader = task({
 				foreach(line; pipes.stdout.byLine){
 					if(line.length)
 						log("[%s] %s".format(command, line));
 				}
-			}).executeInNewThread;
+			});
+			reader.executeInNewThread;
 			foreach(line; pipes.stderr.byLine){
 				if(line.length)
 					log("ERR [%s] %s".format(command, line));
 			}
-			pipes.pid.wait;
+			int res = pipes.pid.wait;
+			reader.yieldForce;
+			log("[exit %s: %s] ".format(res, id));
 		}catch(Throwable t)
 			writeln(t);
 	};
