@@ -21,6 +21,7 @@ alias Color = size_t;
 struct FontColor {
 	Color id;
 	XftColor id_xft;
+	alias id this;
 }
 
 struct Font {

@@ -25,8 +25,8 @@ __gshared:
 int barHeight;
 
 DrawingContext dc;
-Color colorBg;
-Color colorSelected;
+FontColor colorBg;
+FontColor colorSelected;
 FontColor colorText;
 FontColor colorOutput;
 FontColor colorError;
@@ -46,6 +46,10 @@ XClient client;
 
 struct Arguments {
 
+	@("-x") int x;
+	@("-y") int y;
+	@("-w") int w;
+	@("-h") int h;
 	@("-l") int lines = 15; // number of lines in vertical list
 	@("-fn") string font = "Monospace-10";
 	@("-n") bool noNotify;
@@ -80,7 +84,7 @@ void main(string[] args){
 
 		dc = new DrawingContext;
 		dc.initfont(options.font);
-		colorBg = dc.color(options.colorBg);
+		colorBg = dc.fontColor(options.colorBg);
 		colorSelected = dc.color(options.colorSelected);
 		colorText = dc.fontColor(options.colorText);
 		colorOutput = dc.fontColor(options.colorOutput);
@@ -124,9 +128,9 @@ void drawInput(int[2] pos, int[2] size, int sep){
 	int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
 	int paddingHoriz = 0.2.em;
 	dc.rect(pos, size, colorInputBg.id);
-	dc.rect([pos.x+sep-4, pos.y], [2, size.h], colorBg);
+	dc.rect(pos, [sep-4, size.h], colorHint);
 	// cwd
-	dc.text([pos.x+sep-dc.textWidth(getcwd)-paddingHoriz*2, pos.y+dc.font.height-1], getcwd, colorHint);
+	dc.text([pos.x+sep-dc.textWidth(getcwd)-paddingHoriz*2, pos.y+dc.font.height-1], getcwd, colorBg);
 	// input
 	dc.text([pos.x+sep, pos.y+dc.font.height-1], launcher.toString, colorText);
 	int offset = dc.textWidth(launcher.finishedPart);
@@ -137,7 +141,7 @@ void drawInput(int[2] pos, int[2] size, int sep){
 
 void drawMatches(int[2] pos, int[2] size, int sep){
 	auto matches = choiceFilter.res;
-	size_t start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, launcher.selected+1-options.lines/2));
+	size_t start = cast(size_t)min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, launcher.selected+1-options.lines/2));
 	foreach(i, match; matches[start..min($, start+options.lines)]){
 		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
 		if(start+i == launcher.selected)
@@ -175,13 +179,13 @@ class XClient {
 		clip = XInternAtom(dc.dpy, "CLIPBOARD",	false);
 		utf8 = XInternAtom(dc.dpy, "UTF8_STRING", false);
 		barHeight = 1.em;
-		size.w = DisplayWidth(dc.dpy, screen);
-		size.h = barHeight*(options.lines+1)+0.4.em;
+		size.w = options.w ? options.w : DisplayWidth(dc.dpy, screen);
+		size.h = options.h ? options.h : barHeight*(options.lines+1)+0.4.em;
 		swa.override_redirect = true;
 		swa.background_pixel = colorBg;
 		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
 		windowHandle = XCreateWindow(
-			dc.dpy, root, 0, 0, size[0], size[1], 0,
+			dc.dpy, root, options.x, options.y, size[0], size[1], 0,
 			DefaultDepth(dc.dpy, screen), CopyFromParent,
 			DefaultVisual(dc.dpy, screen),
 			CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
@@ -296,7 +300,7 @@ class XClient {
 					XConvertSelection(dc.dpy, clip, utf8, utf8, windowHandle, CurrentTime);
 					return;
 				default:
-					return;
+					break;
 			}
 		switch(key){
 			case XK_Escape:
@@ -324,7 +328,7 @@ class XClient {
 				return;
 			case XK_Return:
 			case XK_KP_Enter:
-				launcher.run;
+				launcher.run(!(ev.state & ControlMask));
 				if(ev.state & ShiftMask)
 					running = false;
 				return;

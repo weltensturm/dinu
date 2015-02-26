@@ -77,7 +77,8 @@ class Launcher {
 		return "";
 	}
 
-	void run(){
+	void run(bool res=true){
+		writeln(toString);
 		if(!command.command){
 			command.finishPart;
 			if(!command.text.length){
@@ -98,7 +99,8 @@ class Launcher {
 		}else if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
 		}
-		reset;
+		if(res)
+			reset;
 	}
 
 	void delBackChar(){

@@ -19,10 +19,12 @@ requires
 usage
 -----
 * Enter name of files or programs to search for them
-* Press tab to select the next list entry
-* Press enter to execute selection
+* <Tab> to select the next list entry
+* <Enter> to execute selection
+* <S-Enter> to execute and quit
+* <C-Enter> to execute and keep current filter
 * Run `cd "path"` to change directory
-* Press <Escape> or <C-Q> to quit
+* <Escape>, <C-Q> (or <Enter> in empty prompt) to quit
 
 
 
