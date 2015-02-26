@@ -46,10 +46,10 @@ XClient client;
 
 struct Arguments {
 
-	@("-l") int lines = 10; // number of lines in vertical list
+	@("-l") int lines = 15; // number of lines in vertical list
 	@("-fn") string font = "Monospace-10";
 	@("-n") bool noNotify;
-	@("-nb") string colorBg = "#222222";
+	@("-nb") string colorBg = "#111111";
 	@("-nf") string colorText = "#eeeeee";
 	@("-co") string colorOutput = "#cccccc";
 	@("-ce") string colorError = "#ff7777";
@@ -106,8 +106,54 @@ void main(string[] args){
 	}
 }
 
+ref T x(T)(ref T[2] a){
+	return a[0];
+}
+alias w = x;
+
+ref T y(T)(ref T[2] a){
+	return a[1];
+}
+alias h = y;
+
 int em(double mod){
 	return cast(int)(dc.font.height*1.3*mod);
+}
+
+void drawInput(int[2] pos, int[2] size, int sep){
+	int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
+	int paddingHoriz = 0.2.em;
+	dc.rect(pos, size, colorInputBg.id);
+	dc.rect([pos.x+sep-4, pos.y], [2, size.h], colorBg);
+	// cwd
+	dc.text([pos.x+sep-dc.textWidth(getcwd)-paddingHoriz*2, pos.y+dc.font.height-1], getcwd, colorHint);
+	// input
+	dc.text([pos.x+sep, pos.y+dc.font.height-1], launcher.toString, colorText);
+	int offset = dc.textWidth(launcher.finishedPart);
+	// cursor
+	int curpos = pos.x+sep+offset + dc.textWidth(launcher.toString[0..launcher.cursor]);
+	dc.rect([curpos, pos.y+0.1.em], [1, 0.8.em], colorText.id);
+}
+
+void drawMatches(int[2] pos, int[2] size, int sep){
+	auto matches = choiceFilter.res;
+	size_t start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, launcher.selected+1-options.lines/2));
+	foreach(i, match; matches[start..min($, start+options.lines)]){
+		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
+		if(start+i == launcher.selected)
+			dc.rect([pos.x+sep-2, y], [size.w-sep, barHeight], colorSelected);
+		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart), y+dc.font.height-1]); 
+	}
+	double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)options.lines).log2));
+	int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1.0 - start/(max(1.0, matches.length-options.lines))));
+	/+
+	double scrollbarHeight = max(2.0, size.h/max(1.0, matches.length.log2)*2);
+	int scrollbarOffset = cast(int)((size.h - scrollbarHeight)*(1.0 - max(0, start)/(max(1.0, matches.length)))) + 1;
+	+/
+	dc.rect([pos.x+sep-4, pos.y], [2, barHeight*options.lines], colorInputBg.id);
+	if(matches.length){
+		dc.rect([pos.x+sep-4, pos.y+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
+	}
 }
 
 class XClient {
@@ -129,8 +175,8 @@ class XClient {
 		clip = XInternAtom(dc.dpy, "CLIPBOARD",	false);
 		utf8 = XInternAtom(dc.dpy, "UTF8_STRING", false);
 		barHeight = 1.em;
-		size[0] = DisplayWidth(dc.dpy, screen);
-		size[1] = barHeight*(options.lines+1);
+		size.w = DisplayWidth(dc.dpy, screen);
+		size.h = barHeight*(options.lines+1)+0.4.em;
 		swa.override_redirect = true;
 		swa.background_pixel = colorBg;
 		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
@@ -161,52 +207,14 @@ class XClient {
 	}
 
 	protected void draw(){
-		
 		assert(thread_isMainThread);
-
-		auto matches = choiceFilter.res;
-
 		dc.rect([0,0], size, colorBg);
-		int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
-		int paddingHoriz = 0.2.em;
-		int cwdWidth = dc.textWidth(getcwd);
-
-		dc.rect([cwdWidth+paddingHoriz*2, 0], [size[0]-cwdWidth-paddingHoriz*2, barHeight], colorInputBg.id);
-
-		// cwd
-		//dc.rect([0,0], [cwdWidth+paddingHoriz*2, barHeight], colorSelected);
-		dc.text([paddingHoriz, dc.font.height-1], getcwd, colorText);
-
-		// input
-		int[2] textPos = [
-			cwdWidth+paddingHoriz*3,
-			dc.font.height-1
-		];
-		dc.text(textPos, launcher.toString, colorText);
-
-		int offset = dc.textWidth(launcher.finishedPart);
-		// cursor
-		int curpos = textPos[0]+offset + dc.textWidth(launcher.toString[0..launcher.cursor]);
-		dc.rect([curpos, 0.1.em], [1, 0.8.em], colorText.id);
-
-		// matches
-		size_t section = cast(size_t)(launcher.selected/options.lines);
-		assert(section <= matches.length/options.lines, "%s".format(section));
-		size_t start = section*options.lines;
-		foreach(i, match; matches[start..min($, start+options.lines)]){
-			int[2] pos = [textPos[0]+offset, cast(int)(i*barHeight+barHeight+dc.font.height-1)];
-			if(start+i == launcher.selected)
-				dc.rect([pos[0]-2, cast(int)(i*barHeight+barHeight)], [size[0]-pos[0]+2, barHeight], colorSelected);
-			match.data.draw(pos);
-		}
-
-		double scrollbarHeight = max(2.0, barHeight*10.0/max(1.0, matches.length.log2)*2);
-		int scrollbarOffset = cast(int)((barHeight*10.0 - scrollbarHeight)*launcher.selected/(max(1.0, matches.length))) + 1;
-		dc.rect([textPos[0]+offset-4, barHeight], [2, barHeight*options.lines], colorInputBg.id);
-		dc.rect([textPos[0]+offset-4, barHeight+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
-
-		dc.mapdc(windowHandle, size[0], size[1]);
+		int separator = size.w/4; //dc.textWidth(getcwd)*2;
+		drawInput([0, options.lines*barHeight+0.2.em], [size.w, barHeight], separator);
+		drawMatches([0, 0], [size.w, barHeight*options.lines], separator);
+		dc.mapdc(windowHandle, size.w, size.h);
 	}
+
 
 	void sendUpdate(){
 		if(!dc.dpy || !windowHandle || !running)
@@ -317,6 +325,8 @@ class XClient {
 			case XK_Return:
 			case XK_KP_Enter:
 				launcher.run;
+				if(ev.state & ShiftMask)
+					running = false;
 				return;
 			default:
 				break;
@@ -336,7 +346,7 @@ class XClient {
 				return;
 			Thread.sleep(dur!"msecs"(10));
 		}
-		writeln("cannot grab keyboard");
+		assert(0, "cannot grab keyboard");
 	}
 
 }

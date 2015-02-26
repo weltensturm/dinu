@@ -3,7 +3,10 @@ module desktop;
 
 import
 	std.file,
+	std.algorithm,
 	std.path,
+	std.regex,
+	std.stdio,
 	std.string;
 
 
@@ -22,10 +25,8 @@ class DesktopEntry {
 	string comment;
 	string terminal;
 
-	this(string path){
-		if(!path.isFile)
-			return;
-		foreach(line; path.readText.splitLines){
+	this(string text){
+		foreach(line; text.splitLines){
 			if(line.startsWith("Exec="))
 				exec = line.chompPrefix("Exec=");
 			if(line.startsWith("Name="))
@@ -35,15 +36,23 @@ class DesktopEntry {
 
 }
 
+DesktopEntry[] readDesktop(string path){
+	DesktopEntry[] result;
+	if(!path.isFile)
+		return result;
+	foreach(section; matchAll(path.readText, `\[[^\]\r\n]+\](?:\r?\n(?:[^\[\r\n].*)?)*`)){
+		result ~= new DesktopEntry(section.hit);
+	}
+	return result;
+}
 
 DesktopEntry[] getAll(){
 	DesktopEntry[] result;
 	foreach(path; desktopPaths){
 		if((path.expandTilde~"/share/applications").exists)
-			foreach(entry; (path.expandTilde~"/share/applications").dirEntries(SpanMode.shallow))
-				result ~= new DesktopEntry(entry);
+			foreach(entry; (path.expandTilde~"/share/applications").dirEntries(SpanMode.breadth))
+				result ~= readDesktop(entry);
 	}
 	return result;
 }
-
 

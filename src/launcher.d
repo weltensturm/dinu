@@ -93,7 +93,7 @@ class Launcher {
 		}else if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
 		}
-		throw new Exception("bye");
+		reset;
 	}
 
 	void delBackChar(){
@@ -193,11 +193,11 @@ class Picker {
 		bool clean = !text.length;
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
-		if(clean)
+		if(clean || selected >= 0)
 			choiceFilter.reset(text);
 		else
 			choiceFilter.narrow(s);
-		if(s == " " && text.length && text[$-1] != '\\'){
+		if(s == " " && (cursor<2 || text[cursor-2] != '\\')){
 			finishPart;
 		}else
 			update;
@@ -216,14 +216,6 @@ class Picker {
 		}
 		onDel;
 	}
-
-	/+
-	void deleteLeft(){
-		text = text[cursor..$];
-		cursor = 0;
-		onDel;
-	}
-	+/
 
 	void deleteWordLeft(){
 		if(!text.length)
@@ -269,9 +261,10 @@ class CommandPicker: Picker {
 
 	override protected void setSelected(long selected){
 		auto res = choiceFilter.res;
+		long min = text.length ? 0 : -1;
 		if(selected >= cast(long)res.length)
-			selected = 0;
-		else if(selected < (text.length ? 0 : -1))
+			selected = min;
+		else if(selected < min)
 			selected = res.length-1L;
 		this.selected = selected;
 	}
@@ -310,7 +303,7 @@ class ChoiceFilter {
 	this(){
 		auto taskExes = task(&loadExecutables, &addChoice);
 		scannedDirs ~= getcwd;
-		auto taskFiles = task(&loadFiles, getcwd, &addChoice);
+		auto taskFiles = task(&loadFiles, getcwd, &addChoice, false);
 		auto taskOutput = task(&loadOutput, &addChoice);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
@@ -446,11 +439,11 @@ class ChoiceFilter {
 						restart = false;
 						client.sendUpdate;
 					}else{
-						auto dir = filter.expandTilde.buildNormalizedPath;
+						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
 						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
 							writeln(dir);
 							scannedDirs ~= dir;
-							task(&loadFiles, dir, &addChoice);
+							task(&loadFiles, dir, &addChoice, true).executeInNewThread;
 						}
 						Thread.sleep(15.msecs);
 						client.sendUpdate;

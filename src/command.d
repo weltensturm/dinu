@@ -127,14 +127,14 @@ class CommandHistory: CommandExec {
 class CommandOutput: CommandExec {
 	
 	size_t idx;
-	string output;
+	string command;
 
 	this(string command, string output, size_t idx, bool err){
-		super(command);
+		super(output);
 		type = Type.output;
-		this.output = output;
+		this.command = command;
 		this.idx = idx;
-		color = err ? colorError : colorOutput;
+		color = err ? colorError : (command == "sh" ? colorExec : colorOutput);
 	}
 
 	override size_t score(){
@@ -142,9 +142,9 @@ class CommandOutput: CommandExec {
 	}
 
 	override int draw(int[2] pos){
-		dc.text(pos, text, colorHint);
-		pos[0] += dc.textWidth(text);
-		dc.text(pos, output, color);
+		pos[0] -= 7;
+		dc.text([pos[0]-dc.textWidth(command), pos[1]], command, colorHint);
+		dc.text(pos, text, color);
 		return pos[0];
 	}
 
@@ -191,22 +191,19 @@ void spawnCommand(string command){
 			command = command.strip;
 			auto userdir = options.configPath.expandTilde;
 			writeln("Running \"%s\"".format(command));
-			/+
-			auto history = userdir ~ ".history";
-			if(history.exists)
-				history.append(command ~ '\n');
-			else
-				std.file.write(history, command ~ '\n');
-			+/
-			log("[%s executing]".format(command));
+			log("[sh] %s".format(command));
 			auto mutex = new Mutex;
 			auto pipes = pipeShell(command);
 			task({
-				foreach(line; pipes.stdout.byLine)
-					log("[%s] %s".format(command, line));
+				foreach(line; pipes.stdout.byLine){
+					if(line.length)
+						log("[%s] %s".format(command, line));
+				}
 			}).executeInNewThread;
-			foreach(line; pipes.stderr.byLine)
-				log("ERR [%s] %s".format(command, line));
+			foreach(line; pipes.stderr.byLine){
+				if(line.length)
+					log("ERR [%s] %s".format(command, line));
+			}
 			pipes.pid.wait;
 		}catch(Throwable t)
 			writeln(t);
