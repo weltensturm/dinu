@@ -19,6 +19,7 @@ import
 	core.sync.condition,
 	draw,
 	cli,
+	dinu.dinu,
 	dinu.xclient,
 	dinu.content,
 	dinu.command;
@@ -50,24 +51,33 @@ class Launcher {
 	CommandPicker command;
 	Picker[] params;
 	Picker currentParam;
+	int logIdx=1;
 
 	alias currentParam this;
 
 	this(){
+		choiceFilter = new ChoiceFilter;
 		reset;
 	}
 
-	void reset(){
-		choiceFilter = new ChoiceFilter;
+	void reset(Type mode = Type.none){
+		//choiceFilter = new ChoiceFilter;
 		params = [];
 		command = new CommandPicker;
 		currentParam = command;
-		choiceFilter.reset("");
+		choiceFilter.commandHistory = false;
+		choiceFilter.reset("", mode);
+	}
+
+	void toggleCommandHistory(){
+		choiceFilter.commandHistory = true;
+		choiceFilter.reset;
 	}
 
 	void next(){
 		params ~= new Picker;
-		choiceFilter.reset("");
+		choiceFilter.commandHistory = false;
+		choiceFilter.reset;
 		currentParam = params[$-1];
 	}
 
@@ -78,11 +88,10 @@ class Launcher {
 	}
 
 	void run(bool res=true){
-		writeln(toString);
 		if(!command.command){
 			command.finishPart;
-			if(!command.text.length){
-				client.running = false;
+			if(command.selected<0){
+				client.close;
 				return;
 			}
 		}
@@ -102,6 +111,22 @@ class Launcher {
 		if(res)
 			reset;
 	}
+
+	/+
+	CommandHistory addHistory(Command command, string params){
+		synchronized(this){
+			auto history = new CommandHistory(command, params, logIdx++);
+			choiceFilter.addPermanent(history);
+			return history;
+		}
+	}
+
+	void addOutput(Command command, string output, bool err){
+		synchronized(this){
+			choiceFilter.addPermanent(new CommandOutput(command.text, output, logIdx++, err));
+		}
+	}
+	+/
 
 	void delBackChar(){
 		if(!currentParam.text.length){
@@ -193,6 +218,8 @@ class Picker {
 
 	void onDel(){
 		update;
+		if(!text.length)
+			choiceFilter.commandHistory = false;
 		choiceFilter.reset(text);
 	}
 
@@ -258,11 +285,17 @@ class CommandPicker: Picker {
 		setSelected(0);
 	}
 
-	override protected void finishPart(){
+	override void onDel(){
+		super.onDel;
 		if(!text.length)
+			setSelected(-1);
+	}
+
+	override protected void finishPart(){
+		if(!text.length && selected<0)
 			return;
 		choiceFilter.wait;
-		command = choiceFilter.res[selected<0 ? 0 : cast(size_t)selected].data;
+		command = choiceFilter.res[cast(size_t)selected].data;
 		text = command.text ~ ' ';
 		cursor = text.length;
 		launcher.next;
@@ -286,7 +319,8 @@ class ChoiceFilter {
 
 	protected {
 
-		Command[] all;
+		Command[] permanent;
+		Command[] temporary;
 		Match[] matches;
 		string filter;
 		string narrowQueue;
@@ -307,13 +341,15 @@ class ChoiceFilter {
 
 		string[] scannedDirs;
 
+		bool commandHistory;
+
 	}
 
 	this(){
-		auto taskExes = task(&loadExecutables, &addChoice);
+		auto taskExes = task(&loadExecutables, &addTemporary);
 		scannedDirs ~= getcwd;
-		auto taskFiles = task(&loadFiles, getcwd, &addChoice, false);
-		auto taskOutput = task(&loadOutput, &addChoice);
+		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, false);
+		auto taskOutput = task(&loadOutput, &addPermanent);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
 		taskOutput.executeInNewThread;
@@ -336,9 +372,13 @@ class ChoiceFilter {
 		idle = true;
 	}
 
-	void reset(string filter){
-		if(!filter.length && (!launcher || !launcher.params.length)){
-			typeFilter = Type.output;
+	void reset(string filter="", Type mode=Type.none){
+		if(mode){
+			typeFilter = mode;
+		}else if(commandHistory){
+			typeFilter = Type.history;
+		}else if(!filter.length && (!launcher || !launcher.params.length)){
+			typeFilter = Type.output | Type.history;
 		}else{
 			typeFilter = Type.file | Type.directory;
 			if(launcher && !launcher.params.length)
@@ -374,10 +414,10 @@ class ChoiceFilter {
 			synchronized(this)
 				matches = [];
 			filterStart = Clock.currSystemTick.seconds;
-			Command[] allCpy;
+			Command[] cpy;
 			synchronized(this)
-				allCpy = all.dup;
-			foreach(m; allCpy)
+				cpy = permanent ~ temporary;
+			foreach(m; cpy)
 				tryMatch(m);
 			idle = true;
 		}
@@ -402,9 +442,15 @@ class ChoiceFilter {
 			idle = true;
 		}
 
-		void addChoice(Command p){
+		void addPermanent(Command p){
 			synchronized(this)
-				all ~= p;
+				permanent ~= p;
+			tryMatch(p);
+		}
+
+		void addTemporary(Command p){
+			synchronized(this)
+				temporary ~= p;
 			tryMatch(p);
 		}
 
@@ -420,20 +466,20 @@ class ChoiceFilter {
 					foreach(i, e; matches){
 						if(e.score < match.score){
 							matches = matches[0..i] ~ match ~ matches[i..$];
-							client.sendUpdate;
+							//client.sendUpdate;
 							return;
 						}
 					}
 					matches = matches ~ match;
 				}
-				client.sendUpdate;
+				//client.sendUpdate;
 			}
 		}
 
 		void filterLoop(){
 			filterThread.isDaemon = true;
 			try{
-				while(!client || client.running){
+				while(true){
 					if(narrowQueue.length){
 						synchronized(this){
 							writeln("narrow queue ", narrowQueue, " ", typeFilter);
@@ -441,21 +487,21 @@ class ChoiceFilter {
 							narrowQueue = "";
 						}
 						intNarrow(filter);
-						client.sendUpdate;
+						//client.sendUpdate;
 					}else if(restart){
 						writeln("restart ", filter, " ", typeFilter);
 						intReset(filter);
 						restart = false;
-						client.sendUpdate;
+						//client.sendUpdate;
 					}else{
 						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
 						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
 							writeln(dir);
 							scannedDirs ~= dir;
-							task(&loadFiles, dir, &addChoice, true).executeInNewThread;
+							task(&loadFiles, dir, &addTemporary, true).executeInNewThread;
 						}
 						Thread.sleep(15.msecs);
-						client.sendUpdate;
+						//client.sendUpdate;
 					}
 				}
 			}catch(Throwable t)

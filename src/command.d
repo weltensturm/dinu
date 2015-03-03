@@ -2,6 +2,7 @@ module dinu.command;
 
 import
 	core.sync.mutex,
+	std.conv,
 	std.string,
 	std.path,
 	std.process,
@@ -11,6 +12,7 @@ import
 	std.stdio,
 	std.file,
 	dinu.xclient,
+	dinu.dinu,
 	draw;
 
 
@@ -65,12 +67,11 @@ class CommandFile: Command {
 	}
 
 	override int draw(int[2] pos){
-		dc.text(pos, name, color);
-		return pos[0]+dc.textWidth(name);
+		return pos.x+dc.text(pos, text, color);
 	}
 
 	override void run(string params){
-		spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
+		this.spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
 	}
 
 }
@@ -103,40 +104,55 @@ class CommandExec: CommandFile {
 	}
 
 	override void run(string params){
-		spawnCommand(name ~ " " ~ params);
+		this.spawnCommand(name, params);
 	}
 
 }
 
-class CommandHistory: CommandExec {
+class CommandHistory: CommandDesktop {
 
 	size_t idx;
+	long result = long.max;
+	string params;
 
-	this(string name, size_t idx){
-		super(name);
+	this(string name, string command, string params, size_t idx){
+		super(name, command);
 		type = Type.history;
 		this.idx = idx;
+		this.params = params;
 	}
 
 	override size_t score(){
 		return idx*1000;
 	}
 
+	override int draw(int[2] pos){
+		string hint;
+		if(result != long.max){
+			if(result)
+				hint = `%s`.format(result);
+			else
+				hint = "";
+		}else
+			hint = "•";
+		dc.text(pos, hint, result&&result!=long.max ? colorError : colorHint, 1.4);
+		pos.x += dc.text(pos, text, colorExec);
+		return dc.text(pos, ' ' ~ params, colorOutput);
+	}
+
 }
 
-class CommandOutput: CommandExec {
+class CommandOutput: CommandFile {
 	
 	size_t idx;
 	string command;
 
 	this(string command, string output, size_t idx, bool err){
-		super(output);
+		super(output.dup); // fucking garbage collector doesn't know its place
 		type = Type.output;
 		this.command = command;
 		this.idx = idx;
-		if(command.startsWith("pid: "))
-			color = colorExec;
-		else if(err)
+		if(err)
 			color = colorError;
 		else
 			color = colorOutput;
@@ -147,10 +163,16 @@ class CommandOutput: CommandExec {
 	}
 
 	override int draw(int[2] pos){
-		pos[0] -= 7;
-		dc.text([pos[0]-dc.textWidth(command), pos[1]], command, colorHint);
-		dc.text(pos, text, color);
-		return pos[0];
+		//pos[0] -= 7;
+		dc.text(pos, command, colorHint, 1.4);
+		return super.draw(pos);
+	}
+
+	override void run(string params){
+		auto command = new CommandExec("echo");
+		command.run("'%s' | xsel -ib".format(
+			text.strip.replace("'", "'\\''")
+		));
 	}
 
 }
@@ -158,14 +180,12 @@ class CommandOutput: CommandExec {
 class CommandDesktop: CommandFile {
 
 	string exec;
-	FontColor colorHint;
 
 	this(string name, string exec){
 		super(name);
 		type = Type.desktop;
 		this.exec = exec;
 		color = colorDesktop;
-		colorHint = dinu.xclient.colorHint;
 	}
 
 	override int draw(int[2] pos){
@@ -184,35 +204,35 @@ class CommandDesktop: CommandFile {
 	}
 
 	override void run(string params){
-		spawnCommand(exec.replace("%f", params).replace("%F", params).replace("%u", params).replace("%U", params));
+		this.spawnCommand(exec.replace("%f", params).replace("%F", params).replace("%u", params).replace("%U", params));
 	}
 
 }
 
 
-void spawnCommand(string command){
+void spawnCommand(Command caller, string command, string arguments=""){
 	auto dg = {
 		try{
-			command = command.strip;
+			command = (command.strip ~ ' ' ~ arguments).strip;
+			writeln("running: \"%s\"".format(command));
 			auto userdir = options.configPath.expandTilde;
-			auto mutex = new Mutex;
 			auto pipes = pipeShell(command);
-			auto id = pipes.pid.processID;
-			log("[pid: %s] %s".format(id, command));
+			auto pid = pipes.pid.processID;
+			log("%s exec \"%s\" \"%s\" \"%s\"".format(pid, caller.text, command, arguments));
 			auto reader = task({
 				foreach(line; pipes.stdout.byLine){
 					if(line.length)
-						log("[%s] %s".format(command, line));
+						log("%s stdout %s".format(pid, line));
 				}
 			});
 			reader.executeInNewThread;
 			foreach(line; pipes.stderr.byLine){
 				if(line.length)
-					log("ERR [%s] %s".format(command, line));
+					log("%s stderr %s".format(pid, line));
 			}
-			int res = pipes.pid.wait;
 			reader.yieldForce;
-			log("[exit %s: %s] ".format(res, id));
+			auto res = pipes.pid.wait;
+			log("%s exit %s".format(pid, res));
 		}catch(Throwable t)
 			writeln(t);
 	};

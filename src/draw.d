@@ -4,11 +4,11 @@ import
 	std.string,
 	std.utf,
 	std.algorithm,
+	std.conv,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
 	x11.keysymdef,
-
 	dinu.xclient;
 
 
@@ -90,8 +90,11 @@ class DrawingContext {
 	}
 
 
-	void text(int[2] pos, string text, FontColor col){
-		int x = pos[0];
+	int text(int[2] pos, string text, FontColor col, double offset=0){
+		int textWidth = textWidth(text);
+		int offsetRight = max(0.0,-offset).em;
+		int offsetLeft = max(0.0,offset-1).em;
+		int x = pos[0] - cast(int)(min(1,max(0,offset))*textWidth) + offsetRight - offsetLeft;
 		int y = pos[1];
 		XSetForeground(dpy, gc, col.id);
 		if(font.xft_font){
@@ -104,6 +107,7 @@ class DrawingContext {
 			XSetFont(dpy, gc, font.xfont.fid);
 			XDrawString(dpy, canvas, gc, x, y, cast(char*)text, cast(int)text.length);
 		}
+		return x+textWidth-pos[0];
 	}
 
 	void freecol(FontColor col){
@@ -141,10 +145,12 @@ class DrawingContext {
 		if(!font.set)
 			font.xft_font = XftFontOpenName(dpy, DefaultScreen(dpy), cast(char*)fontstr);
 
+		import std.stdio;
 		if(font.xfont){
 			font.ascent = font.xfont.ascent;
 			font.descent = font.xfont.descent;
 			font.width   = font.xfont.max_bounds.width;
+			writeln("loaded X font " ~ fontstr);
 		}else if(font.set){
 			n = XFontsOfFontSet(font.set, &xfonts, &names);
 			for(i = 0; i < n; i++){
@@ -152,10 +158,12 @@ class DrawingContext {
 				font.descent = max(font.descent, xfonts[i].descent);
 				font.width   = max(font.width,   cast(int)xfonts[i].max_bounds.width);
 			}
+			writeln("loaded X font " ~ fontstr);
 		}else if(font.xft_font){
 			font.ascent = font.xft_font.ascent;
 			font.descent = font.xft_font.descent;
 			font.width = font.xft_font.max_advance_width;
+			writeln("loaded Xft font " ~ fontstr);
 		}else
 			throw new Exception("cannot load font '%s'", fontstr);
 		if(missing)
@@ -225,6 +233,7 @@ extern(C){
 	void XftFontClose(Display*, XftFont*);
 	void XftDrawDestroy(XftDraw*);
 	void XftDrawStringUtf8(XftDraw*, XftColor*, XftFont*, int, int, char*, int);
+	void XftDrawString32(XftDraw*, XftColor*, XftFont*, int, int, dchar*, int);
 	void XftColorFree(Display*, Visual*, Colormap, XftColor*);
 	Bool XftColorAllocName (Display*, Visual*, Colormap, char*, XftColor*);
 	XftFont* XftFontOpenName (Display*, int , char *);

@@ -14,6 +14,8 @@ import
 	draw,
 	cli,
 	dinu.launcher,
+	dinu.command,
+	dinu.dinu,
 	desktop,
 	x11.X,
 	x11.Xlib,
@@ -24,7 +26,6 @@ __gshared:
 
 int barHeight;
 
-DrawingContext dc;
 FontColor colorBg;
 FontColor colorSelected;
 FontColor colorText;
@@ -36,79 +37,12 @@ FontColor colorExec;
 FontColor colorHint;
 FontColor colorDesktop;
 FontColor colorInputBg;
-
-Arguments options;
-
 Launcher launcher;
 
+DrawingContext dc;
 XClient client;
 
 
-struct Arguments {
-
-	@("-x") int x;
-	@("-y") int y;
-	@("-w") int w;
-	@("-h") int h;
-	@("-l") int lines = 15; // number of lines in vertical list
-	@("-fn") string font = "Monospace-10";
-	@("-n") bool noNotify;
-	@("-nb") string colorBg = "#111111";
-	@("-nf") string colorText = "#eeeeee";
-	@("-co") string colorOutput = "#cccccc";
-	@("-ce") string colorError = "#ff7777";
-	@("-sb") string colorSelected = "#005577";
-	@("-ch") string colorHint = "#777777";
-	@("-cd") string colorDir = "#aaffaa";
-	@("-cf") string colorFile = "#eeeeee";
-	@("-ce") string colorExec = "#aaaaff";
-	@("-cd") string colorDesktop = "#acacff";
-	@("-ci") string colorInputBg = "#333333";
-	@("-c") string configPath = "~/.dinu/default";
-
-	mixin cli!Arguments;
-
-}
-
-
-void main(string[] args){
-	try {
-		XInitThreads();
-		options = Arguments(args);
-		//environment["DE"] = "gnome";
-		options.configPath = options.configPath.expandTilde;
-		if(!options.configPath.dirName.exists)
-			mkdirRecurse(options.configPath.dirName);
-		if(options.configPath.exists)
-			chdir(options.configPath.expandTilde.readText.strip);
-
-		dc = new DrawingContext;
-		dc.initfont(options.font);
-		colorBg = dc.fontColor(options.colorBg);
-		colorSelected = dc.color(options.colorSelected);
-		colorText = dc.fontColor(options.colorText);
-		colorOutput = dc.fontColor(options.colorOutput);
-		colorError = dc.fontColor(options.colorError);
-		colorDir = dc.fontColor(options.colorDir);
-		colorFile = dc.fontColor(options.colorFile);
-		colorExec = dc.fontColor(options.colorExec);
-		colorHint = dc.fontColor(options.colorHint);
-		colorDesktop = dc.fontColor(options.colorDesktop);
-		colorInputBg = dc.fontColor(options.colorInputBg);
-
-		//spawnShell("notify-send " ~ options.configPath);
-
-		client = new XClient;
-		launcher = new Launcher;
-		client.draw;
-		scope(exit)
-			client.destroy;
-		client.grabKeyboard;
-		client.handleEvents;
-	}catch(Exception e){
-		writeln(e);
-	}
-}
 
 ref T x(T)(ref T[2] a){
 	return a[0];
@@ -128,9 +62,9 @@ void drawInput(int[2] pos, int[2] size, int sep){
 	int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
 	int paddingHoriz = 0.2.em;
 	dc.rect(pos, size, colorInputBg.id);
-	dc.rect(pos, [sep-4, size.h], colorHint);
+	dc.rect(pos, [sep-3, size.h], colorHint);
 	// cwd
-	dc.text([pos.x+sep-dc.textWidth(getcwd)-paddingHoriz*2, pos.y+dc.font.height-1], getcwd, colorBg);
+	dc.text([pos.x+sep, pos.y+dc.font.height-1], getcwd, colorBg, 1.4);
 	// input
 	dc.text([pos.x+sep, pos.y+dc.font.height-1], launcher.toString, colorText);
 	int offset = dc.textWidth(launcher.finishedPart);
@@ -162,7 +96,7 @@ void drawMatches(int[2] pos, int[2] size, int sep){
 
 class XClient {
 
-	bool running = true;
+	bool open = true;
 	XIC xic;
 	Atom clip;
 	Atom utf8;
@@ -203,14 +137,18 @@ class XClient {
 		dc.resizedc(size[0], size[1]);
 	}
 
-	void destroy(){
-		running = false;
-		XDestroyWindow(dc.dpy, windowHandle);
+	void close(){
+		if(!open)
+			return;
+		open = false;
 		XUngrabKeyboard(dc.dpy, CurrentTime);
-		dc.destroy;
+		XDestroyWindow(dc.dpy, windowHandle);
+		writeln("closing");
 	}
 
-	protected void draw(){
+	void draw(){
+		if(!open)
+			return;
 		assert(thread_isMainThread);
 		dc.rect([0,0], size, colorBg);
 		int separator = size.w/4; //dc.textWidth(getcwd)*2;
@@ -221,7 +159,7 @@ class XClient {
 
 
 	void sendUpdate(){
-		if(!dc.dpy || !windowHandle || !running)
+		if(!dc.dpy || !windowHandle || !open)
 			return;
 		if(lastUpdate+10 > Clock.currSystemTick.msecs)
 			return;
@@ -235,41 +173,43 @@ class XClient {
 
 	void handleEvents(){
 		XEvent ev;
-		while(running && !XNextEvent(dc.dpy, &ev)){
+		while(XPending(dc.dpy)){
+			XNextEvent(dc.dpy, &ev);
+		//while(open && !XNextEvent(dc.dpy, &ev)){
 			if(XFilterEvent(&ev, windowHandle))
 				continue;
 			switch(ev.type){
-			case Expose:
-				if(ev.xexpose.count == 0)
-					dc.mapdc(windowHandle, size[0], size[1]);
-				break;
-			case KeyPress:
-				onKey(&ev.xkey);
-				draw;
-				break;
-			case SelectionNotify:
-				if(ev.xselection.property == utf8){
-					char* p;
-					int actualFormat;
-					size_t count;
-					Atom actualType;
-					XGetWindowProperty(
-						dc.dpy, windowHandle, utf8, 0, 1024, false, utf8,
-						&actualType, &actualFormat, &count, &count, cast(ubyte**)&p
-					);
-					launcher.insert(p.to!string);
-					XFree(p);
+				case Expose:
+					if(ev.xexpose.count == 0)
+						dc.mapdc(windowHandle, size[0], size[1]);
+					break;
+				case KeyPress:
+					onKey(&ev.xkey);
 					draw;
-				}
-				break;
-			case VisibilityNotify:
-				if(ev.xvisibility.state != VisibilityUnobscured)
-					XRaiseWindow(dc.dpy, windowHandle);
-				break;
-			case ClientMessage:
-				draw;
-				break;
-			default: break;
+					break;
+				case SelectionNotify:
+					if(ev.xselection.property == utf8){
+						char* p;
+						int actualFormat;
+						size_t count;
+						Atom actualType;
+						XGetWindowProperty(
+							dc.dpy, windowHandle, utf8, 0, 1024, false, utf8,
+							&actualType, &actualFormat, &count, &count, cast(ubyte**)&p
+						);
+						launcher.insert(p.to!string);
+						XFree(p);
+						draw;
+					}
+					break;
+				case VisibilityNotify:
+					if(ev.xvisibility.state != VisibilityUnobscured)
+						XRaiseWindow(dc.dpy, windowHandle);
+					break;
+				case ClientMessage:
+					draw;
+					break;
+				default: break;
 			}
 		}
 	}
@@ -283,6 +223,9 @@ class XClient {
 		auto length = Xutf8LookupString(xic, ev, buf.ptr, cast(int)buf.length, &key, &status);
 		if(ev.state & ControlMask)
 			switch(key){
+				case XK_r:
+					launcher.toggleCommandHistory;
+					return;
 				case XK_q:
 					key = XK_Escape;
 					break;
@@ -304,7 +247,7 @@ class XClient {
 			}
 		switch(key){
 			case XK_Escape:
-				running = false;
+				close;
 				return;
 			case XK_Delete:
 				launcher.delChar;
@@ -330,7 +273,7 @@ class XClient {
 			case XK_KP_Enter:
 				launcher.run(!(ev.state & ControlMask));
 				if(ev.state & ShiftMask)
-					running = false;
+					close;
 				return;
 			default:
 				break;
