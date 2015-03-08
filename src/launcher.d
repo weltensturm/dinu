@@ -98,15 +98,20 @@ class Launcher {
 		if(toString.startsWith("cd ")){
 			string cwd = toString[3..$].expandTilde.unixClean;
 			chdir(cwd);
+			command.command.run(reduce!"a ~ b.text"("", params));
 			std.file.write(options.configPath.expandTilde, getcwd);
 			reset;
+			choiceFilter.startOver;
 			return;
 		}else if(toString.strip == "clear"){
 			std.file.write(options.configPath ~ ".log", "");
 			reset;
+			choiceFilter.output = [];
+			choiceFilter.startOver;
 			return;
 		}else if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
+			choiceFilter.startOver;
 		}
 		if(res)
 			reset;
@@ -319,6 +324,7 @@ class ChoiceFilter {
 
 	protected {
 
+		Command[] output;
 		Command[] permanent;
 		Command[] temporary;
 		Match[] matches;
@@ -341,28 +347,46 @@ class ChoiceFilter {
 
 		string[] scannedDirs;
 
-		bool commandHistory;
-
 	}
 
+	bool commandHistory;
+
 	this(){
+		task(&loadOutput, (Command c){
+			synchronized(this)
+				output ~= c;
+			tryMatch(c);
+		}).executeInNewThread;
+		startOver;
+	}
+
+	void startOver(){
+
+		if(waitLoad)
+			waitLoad();
+
+		permanent = [];
+		temporary = [];
+
 		auto taskExes = task(&loadExecutables, &addTemporary);
 		scannedDirs ~= getcwd;
 		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, false);
-		auto taskOutput = task(&loadOutput, &addPermanent);
+		//auto taskOutput = task(&loadOutput, &addPermanent);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
-		taskOutput.executeInNewThread;
+		//taskOutput.executeInNewThread;
 		waitLoad = {
 			while(!taskExes.done || !taskFiles.done)
 				Thread.sleep(10.msecs);
 		};
 		filterThread = new Thread(&filterLoop);
 		filterThread.start;
-		reset("");
+		
+		reset;
 	}
 
 	void wait(){
+		/+
 		writeln("waiting");
 		waitLoad();
 		while(!idle)
@@ -370,6 +394,7 @@ class ChoiceFilter {
 		idle = false;
 		writeln("done");
 		idle = true;
+		+/
 	}
 
 	void reset(string filter="", Type mode=Type.none){
@@ -416,7 +441,7 @@ class ChoiceFilter {
 			filterStart = Clock.currSystemTick.seconds;
 			Command[] cpy;
 			synchronized(this)
-				cpy = permanent ~ temporary;
+				cpy = permanent ~ temporary ~ output;
 			foreach(m; cpy)
 				tryMatch(m);
 			idle = true;
@@ -482,21 +507,20 @@ class ChoiceFilter {
 				while(true){
 					if(narrowQueue.length){
 						synchronized(this){
-							writeln("narrow queue ", narrowQueue, " ", typeFilter);
+							//writeln("narrow queue ", narrowQueue, " ", typeFilter);
 							filter ~= narrowQueue;
 							narrowQueue = "";
 						}
 						intNarrow(filter);
 						//client.sendUpdate;
 					}else if(restart){
-						writeln("restart ", filter, " ", typeFilter);
+						//writeln("restart ", filter, " ", typeFilter);
 						intReset(filter);
 						restart = false;
 						//client.sendUpdate;
 					}else{
 						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
 						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
-							writeln(dir);
 							scannedDirs ~= dir;
 							task(&loadFiles, dir, &addTemporary, true).executeInNewThread;
 						}

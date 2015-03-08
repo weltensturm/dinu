@@ -59,17 +59,20 @@ int em(double mod){
 }
 
 void drawInput(int[2] pos, int[2] size, int sep){
-	int inputWidth = dc.textWidth(launcher.toString);//draw.max(options.inputWidth, dc.textWidth(text));
-	int paddingHoriz = 0.2.em;
-	dc.rect(pos, size, colorInputBg.id);
-	dc.rect(pos, [sep-3, size.h], colorHint);
+	dc.rect(pos, size, colorInputBg);
 	// cwd
-	dc.text([pos.x+sep, pos.y+dc.font.height-1], getcwd, colorBg, 1.4);
+	if(choiceFilter.commandHistory){
+		dc.rect(pos, [sep-3, size.h], colorSelected);
+		dc.text([pos.x+sep, pos.y+dc.font.height-1], getcwd ~ " | command history", colorOutput, 1.4);
+	}else{
+		dc.rect(pos, [sep-3, size.h], colorHint);
+		dc.text([pos.x+sep, pos.y+dc.font.height-1], getcwd, colorBg, 1.4);
+	}
 	// input
-	dc.text([pos.x+sep, pos.y+dc.font.height-1], launcher.toString, colorText);
+	dc.text([pos.x+sep+0.1.em, pos.y+dc.font.height-1], launcher.toString, colorText);
 	int offset = dc.textWidth(launcher.finishedPart);
 	// cursor
-	int curpos = pos.x+sep+offset + dc.textWidth(launcher.toString[0..launcher.cursor]);
+	int curpos = pos.x+sep+offset+0.1.em + dc.textWidth(launcher.toString[0..launcher.cursor]);
 	dc.rect([curpos, pos.y+0.1.em], [1, 0.8.em], colorText.id);
 }
 
@@ -80,7 +83,7 @@ void drawMatches(int[2] pos, int[2] size, int sep){
 		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
 		if(start+i == launcher.selected)
 			dc.rect([pos.x+sep-2, y], [size.w-sep, barHeight], colorSelected);
-		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart), y+dc.font.height-1]); 
+		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart)+0.1.em, y+dc.font.height-1]); 
 	}
 	double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)options.lines).log2));
 	int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1.0 - start/(max(1.0, matches.length-options.lines))));
@@ -135,15 +138,16 @@ class XClient {
 		);
 		XMapRaised(dc.dpy, windowHandle);
 		dc.resizedc(size[0], size[1]);
+		draw;
 	}
 
 	void close(){
 		if(!open)
 			return;
 		open = false;
+		//XUnmapWindow(dc.dpy, windowHandle);
 		XUngrabKeyboard(dc.dpy, CurrentTime);
 		XDestroyWindow(dc.dpy, windowHandle);
-		writeln("closing");
 	}
 
 	void draw(){

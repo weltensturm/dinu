@@ -7,6 +7,7 @@ import
 	std.conv,
 	std.regex,
 	std.process,
+	std.parallelism,
 	std.string,
 	std.stream,
 	std.array,
@@ -19,6 +20,9 @@ import
 	dinu.dinu,
 	dinu.xclient,
 	dinu.command;
+
+
+__gshared:
 
 
 void loadExecutables(void delegate(Command) addChoice){
@@ -38,7 +42,6 @@ void loadExecutables(void delegate(Command) addChoice){
 				addChoice(new CommandDesktop(desktop.name, desktop.exec));
 		}
 		p.pid.wait;
-		writeln("done loading executables");
 	}catch(Throwable t){
 		writeln(t);
 	}
@@ -82,9 +85,44 @@ void loadFiles(string dir, void delegate(Command) addChoice, bool keepPre=false)
 			writeln(t);
 		}
 	}
-	writeln("done loading dirs");
 }
 
+
+CommandHistory[int] running;
+
+
+void matchLine(string line, size_t idx, void delegate(Command) addChoice){
+	foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
+		auto pid = to!int(match.captures[1]);
+		if(match.captures[2] == "exec"){
+			auto cmd = match.captures[3].match(`"((?:[^"]|\\")*)" "((?:[^"]|\\")*)" "((?:[^"]|\\")*)" "((?:[^"]|\\")*)"`);
+		auto history = new CommandHistory(to!Type(cmd.captures[1]), cmd.captures[2], cmd.captures[3], cmd.captures[4], idx);
+		running[pid] = history;
+		if(!exists("/proc/%s".format(pid)))
+			history.result = -1;
+			addChoice(history);
+		}else if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
+			//if(pid in running)
+			addChoice(new CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
+		}else if(match.captures[2] == "exit"){
+			if(pid in running)
+				running[pid].result = to!int(match.captures[3]);
+		}
+	}
+}
+
+
+void loadBackwards(void delegate(Command) addChoice, size_t idx){
+	auto p = pipeProcess(["tac", options.configPath ~ ".log"], Redirect.stdout);
+	foreach(line; p.stdout.byLine){
+		matchLine(cast(string)line, idx--, addChoice);
+		if(idx<10000-100)
+			core.thread.Thread.sleep(1.msecs);
+		else if(idx<0 || !client.open)
+			return;
+	}
+	p.pid.wait;
+}
 
 
 void loadOutput(void delegate(Command) addChoice){
@@ -93,30 +131,16 @@ void loadOutput(void delegate(Command) addChoice){
 		while(!log.exists || !client || !client.open)
 			core.thread.Thread.sleep(100.msecs);
 		auto file = new BufferedFile(log);
-		size_t idx = 1;
-		CommandHistory[int] running;
+		//file.seekEnd(-200);
+		//file.position = max(0L, cast(long)file.size-4000L);
+		size_t idx = 10000;
+		task(&loadBackwards, addChoice, idx).executeInNewThread;
 		while(client.open){
 			if(!file.eof){
 				auto line = cast(string)file.readLine;
 				if(!line.length)
 					continue;
-				foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
-					auto pid = to!int(match.captures[1]);
-					if(match.captures[2] == "exec"){
-						auto cmd = match.captures[3].match(`"((?:[^"]|\\")*)" "((?:[^"]|\\")*)" "((?:[^"]|\\")*)"`);
-						writeln(cmd);
-						auto history = new CommandHistory(cmd.captures[1], cmd.captures[2], cmd.captures[3], idx++);
-						running[pid] = history;
-						addChoice(history);
-					}else if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
-						addChoice(new CommandOutput(running[pid].text, match.captures[3], idx++, match.captures[2]=="stderr"));
-					}else if(match.captures[2] == "exit"){
-						running[pid].result = to!int(match.captures[3]);
-					}
-				}
-				//auto command = line[line.countUntil("[")+1 .. line.countUntil("]")];
-				//auto text = line[line.countUntil("]")+1 .. $];
-				//addChoice(new CommandOutput(command, text, idx++, line.startsWith("ERR ")));
+				matchLine(line, idx++, addChoice);
 			}else
 				core.thread.Thread.sleep(5.msecs);
 		}

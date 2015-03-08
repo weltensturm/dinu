@@ -10,9 +10,12 @@ import
 	std.algorithm,
 	std.array,
 	std.stdio,
+	std.datetime,
 	std.file,
+	std.math,
 	dinu.xclient,
 	dinu.dinu,
+	dinu.content,
 	draw;
 
 
@@ -51,6 +54,7 @@ class CommandFile: Command {
 	this(string name){
 		this.name = name;
 		type = Type.file;
+		assert(colorFile);
 		color = colorFile;
 	}
 
@@ -67,7 +71,14 @@ class CommandFile: Command {
 	}
 
 	override int draw(int[2] pos){
-		return pos.x+dc.text(pos, text, color);
+		dc.clip(pos, [client.size.w-pos.x, barHeight]);
+		int x = 0;
+		if(dc.textWidth(text) > client.size.w-pos.x){
+			x = cast(int)((dc.textWidth(text) - client.size.w + pos.x)*(min(1.0, max(-1.0, sin(Clock.currSystemTick.msecs/2000.0)))+1)/2);
+		}
+		int advance = dc.text([pos.x-x, pos.y], text, color);
+		dc.noclip;
+		return pos.x+advance;
 	}
 
 	override void run(string params){
@@ -114,12 +125,18 @@ class CommandHistory: CommandDesktop {
 	size_t idx;
 	long result = long.max;
 	string params;
+	Type originalType;
 
-	this(string name, string command, string params, size_t idx){
-		super(name, command);
+	this(Type originalType, string name, string command, string params, size_t idx){
+		super(name.dup, command.dup); // immutable is a lie
 		type = Type.history;
+		this.originalType = originalType;
 		this.idx = idx;
-		this.params = params;
+		this.params = params.dup;
+	}
+
+	override string text(){
+		return super.text ~ ' ' ~ params;
 	}
 
 	override size_t score(){
@@ -130,13 +147,13 @@ class CommandHistory: CommandDesktop {
 		string hint;
 		if(result != long.max){
 			if(result)
-				hint = `%s`.format(result);
+				hint = to!string(result);
 			else
 				hint = "";
 		}else
 			hint = "•";
-		dc.text(pos, hint, result&&result!=long.max ? colorError : colorHint, 1.4);
-		pos.x += dc.text(pos, text, colorExec);
+		dc.text(pos, hint, result&&result!=long.max ? colorError : colorHint, 1.45);
+		pos.x += dc.text(pos, super.text, colorExec);
 		return dc.text(pos, ' ' ~ params, colorOutput);
 	}
 
@@ -146,11 +163,12 @@ class CommandOutput: CommandFile {
 	
 	size_t idx;
 	string command;
+	int pid;
 
-	this(string command, string output, size_t idx, bool err){
+	this(int pid, string output, size_t idx, bool err){
 		super(output.dup); // fucking garbage collector doesn't know its place
 		type = Type.output;
-		this.command = command;
+		this.pid = pid;
 		this.idx = idx;
 		if(err)
 			color = colorError;
@@ -163,8 +181,12 @@ class CommandOutput: CommandFile {
 	}
 
 	override int draw(int[2] pos){
-		//pos[0] -= 7;
-		dc.text(pos, command, colorHint, 1.4);
+		if(command.length){
+			//pos[0] -= 7;
+			dc.text(pos, command, colorHint, 1.45);
+		}else if(pid in running){
+			command = running[pid].text;
+		}
 		return super.draw(pos);
 	}
 
@@ -218,7 +240,7 @@ void spawnCommand(Command caller, string command, string arguments=""){
 			auto userdir = options.configPath.expandTilde;
 			auto pipes = pipeShell(command);
 			auto pid = pipes.pid.processID;
-			log("%s exec \"%s\" \"%s\" \"%s\"".format(pid, caller.text, command, arguments));
+			log("%s exec \"%s\" \"%s\" \"%s\" \"%s\"".format(pid, caller.type, caller.text, command.replace("\"", "\\\""), arguments.replace("\"", "\\\"")));
 			auto reader = task({
 				foreach(line; pipes.stdout.byLine){
 					if(line.length)
@@ -253,7 +275,6 @@ void log(string text){
 			path.append(text ~ '\n');
 		else
 			std.file.write(path, text ~ '\n');
-		writeln(text);
 	}
 }
 

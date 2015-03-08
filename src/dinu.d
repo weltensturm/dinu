@@ -49,7 +49,7 @@ struct Arguments {
 	@("-cd") string colorDir = "#aaffaa";
 	@("-cf") string colorFile = "#eeeeee";
 	@("-ce") string colorExec = "#aaaaff";
-	@("-cd") string colorDesktop = "#acacff";
+	@("-cd") string colorDesktop = "#acccff";
 	@("-ci") string colorInputBg = "#333333";
 	@("-c") string configPath = "~/.dinu/default";
 
@@ -72,8 +72,6 @@ void main(string[] args){
 			mkdirRecurse(options.configPath.dirName);
 		if(options.configPath.exists)
 			chdir(options.configPath.expandTilde.readText.strip);
-
-		launcher = new Launcher;
 
 		windowLoop;
 
@@ -99,6 +97,8 @@ void windowLoop(){
 	colorDesktop = dc.fontColor(options.colorDesktop);
 	colorInputBg = dc.fontColor(options.colorInputBg);
 
+	launcher = new Launcher;
+
 	client = new XClient;
 	scope(exit)
 		client.close;
@@ -108,9 +108,8 @@ void windowLoop(){
 		client.handleEvents;
 		client.draw;
 		auto curr = Clock.currSystemTick.msecs;
-		auto sleep = 15 - max(0, min(15, curr-last));
 		last = curr;
-		Thread.sleep(sleep.msecs);
+		Thread.sleep((15 - max(0, min(15, curr-last))).msecs);
 	}
 	dc.destroy;
 }

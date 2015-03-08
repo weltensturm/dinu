@@ -89,6 +89,14 @@ class DrawingContext {
 			XDrawRectangle(dpy, canvas, gc, pos[0], pos[1], size[0]-1, size[1]-1);
 	}
 
+	void clip(int[2] pos, int[2] size){
+		auto rect = XRectangle(cast(short)pos[0], cast(short)pos[1], cast(short)size[0], cast(short)size[1]);
+		XSetClipRectangles(dpy, gc, 0, 0, &rect, 1, Unsorted);
+	}
+
+	void noclip(){
+		XSetClipMask(dpy, gc, None);
+	}
 
 	int text(int[2] pos, string text, FontColor col, double offset=0){
 		int textWidth = textWidth(text);
