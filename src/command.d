@@ -3,6 +3,7 @@ module dinu.command;
 import
 	core.sync.mutex,
 	std.conv,
+	std.array,
 	std.string,
 	std.path,
 	std.process,
@@ -13,6 +14,7 @@ import
 	std.datetime,
 	std.file,
 	std.math,
+	std.regex,
 	dinu.xclient,
 	dinu.dinu,
 	dinu.content,
@@ -35,10 +37,20 @@ enum Type {
 }
 
 
+string[] bangSplit(string text){
+	return text.split(regex(`(?<!\\)\!`)).map!`a.replace("\\!", "!")`.array;
+}
+
+string bangJoin(string[] parts){
+	return parts.map!`a.replace("!", "\\!")`.join("!");
+}
+
+
 class Command {
-	abstract int draw(int[2] pos);
+	abstract int draw(int[2] pos, bool selected);
 	abstract string text();
 	abstract string filterText();
+	abstract string serialize();
 	//bool lessenScore();
 	abstract size_t score();
 	abstract void run(string params);
@@ -51,11 +63,16 @@ class CommandFile: Command {
 	string name;
 	FontColor color;
 
+	private this(){}
+
 	this(string name){
 		this.name = name;
 		type = Type.file;
-		assert(colorFile);
 		color = colorFile;
+	}
+
+	override string serialize(){
+		return name;
 	}
 
 	override string text(){
@@ -70,11 +87,12 @@ class CommandFile: Command {
 		return 0;
 	}
 
-	override int draw(int[2] pos){
-		dc.clip(pos, [client.size.w-pos.x, barHeight]);
+	override int draw(int[2] pos, bool selected){
+		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
 		int x = 0;
-		if(dc.textWidth(text) > client.size.w-pos.x){
-			x = cast(int)((dc.textWidth(text) - client.size.w + pos.x)*(min(1.0, max(-1.0, sin(Clock.currSystemTick.msecs/2000.0)))+1)/2);
+		if(selected && dc.textWidth(text) > client.size.w-pos.x){
+			int diff = dc.textWidth(text) - (client.size.w-pos.x);
+			x = cast(int)(diff*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
 		}
 		int advance = dc.text([pos.x-x, pos.y], text, color);
 		dc.noclip;
@@ -90,7 +108,7 @@ class CommandFile: Command {
 class CommandDir: CommandFile {
 
 	this(string name){
-		super(name);
+		this.name = name;
 		type = Type.directory;
 		color = colorDir;
 	}
@@ -105,7 +123,7 @@ class CommandDir: CommandFile {
 class CommandExec: CommandFile {
 
 	this(string name){
-		super(name);
+		this.name = name;
 		type = Type.script;
 		color = colorExec;
 	}
@@ -120,30 +138,44 @@ class CommandExec: CommandFile {
 
 }
 
-class CommandHistory: CommandDesktop {
+class CommandHistory: CommandFile {
 
 	size_t idx;
 	long result = long.max;
 	string params;
 	Type originalType;
+	Command command;
 
-	this(Type originalType, string name, string command, string params, size_t idx){
-		super(name.dup, command.dup); // immutable is a lie
-		type = Type.history;
-		this.originalType = originalType;
+	this(size_t idx, int pid, Type originalType, string serialized, string params){
 		this.idx = idx;
-		this.params = params.dup;
-	}
-
-	override string text(){
-		return super.text ~ ' ' ~ params;
+		this.params = params;
+		this.name = serialized;
+		type = Type.history;
+		switch(originalType){
+			case Type.script:
+				command = new CommandExec(serialized);
+				break;
+			case Type.desktop:
+				command = new CommandDesktop(serialized);
+				break;
+			case Type.file:
+				command = new CommandFile(serialized);
+				break;
+			case Type.directory:
+				command = new CommandDir(serialized);
+				break;
+			default:
+				break;
+		}
 	}
 
 	override size_t score(){
 		return idx*1000;
 	}
 
-	override int draw(int[2] pos){
+	override int draw(int[2] pos, bool selected){
+		//if(!selected)
+		//	dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorInputBg);
 		string hint;
 		if(result != long.max){
 			if(result)
@@ -152,9 +184,13 @@ class CommandHistory: CommandDesktop {
 				hint = "";
 		}else
 			hint = "•";
-		dc.text(pos, hint, result&&result!=long.max ? colorError : colorHint, 1.45);
-		pos.x += dc.text(pos, super.text, colorExec);
+		dc.text(pos, hint, colorHint, 1.45);
+		pos.x = command.draw(pos, selected);
 		return dc.text(pos, ' ' ~ params, colorOutput);
+	}
+
+	override void run(string params){
+		command.run(this.params ~ " " ~ params);
 	}
 
 }
@@ -180,14 +216,15 @@ class CommandOutput: CommandFile {
 		return idx*1000;
 	}
 
-	override int draw(int[2] pos){
+	override int draw(int[2] pos, bool selected){
+		if(!selected)
+			dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorOutputBg);
 		if(command.length){
-			//pos[0] -= 7;
 			dc.text(pos, command, colorHint, 1.45);
 		}else if(pid in running){
 			command = running[pid].text;
 		}
-		return super.draw(pos);
+		return super.draw(pos, selected);
 	}
 
 	override void run(string params){
@@ -203,19 +240,23 @@ class CommandDesktop: CommandFile {
 
 	string exec;
 
-	this(string name, string exec){
-		super(name);
-		type = Type.desktop;
-		this.exec = exec;
+	this(string args){
+		auto split = args.bangSplit;
+		name = split[0];
+		exec = split[1];
 		color = colorDesktop;
+		type = Type.desktop;
 	}
 
-	override int draw(int[2] pos){
-		int r = super.draw(pos);
+	override string serialize(){
+		return [name, exec].bangJoin;
+	}
+
+	override int draw(int[2] pos, bool selected){
+		int r = super.draw(pos, selected);
 		dc.text([r+5, pos[1]], exec, colorHint);
 		return pos[0];
 	}
-
 
 	override size_t score(){
 		return 100;
@@ -240,7 +281,7 @@ void spawnCommand(Command caller, string command, string arguments=""){
 			auto userdir = options.configPath.expandTilde;
 			auto pipes = pipeShell(command);
 			auto pid = pipes.pid.processID;
-			log("%s exec \"%s\" \"%s\" \"%s\" \"%s\"".format(pid, caller.type, caller.text, command.replace("\"", "\\\""), arguments.replace("\"", "\\\"")));
+			log("%s exec %s!%s!%s".format(pid, caller.type, caller.serialize.replace("!", "\\!"), arguments.replace("!", "\\!")));
 			auto reader = task({
 				foreach(line; pipes.stdout.byLine){
 					if(line.length)

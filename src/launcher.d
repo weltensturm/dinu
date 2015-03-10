@@ -111,7 +111,8 @@ class Launcher {
 			return;
 		}else if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
-			choiceFilter.startOver;
+			if(res)
+				choiceFilter.startOver;
 		}
 		if(res)
 			reset;

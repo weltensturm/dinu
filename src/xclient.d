@@ -30,6 +30,7 @@ FontColor colorBg;
 FontColor colorSelected;
 FontColor colorText;
 FontColor colorOutput;
+FontColor colorOutputBg;
 FontColor colorError;
 FontColor colorDir;
 FontColor colorFile;
@@ -83,7 +84,7 @@ void drawMatches(int[2] pos, int[2] size, int sep){
 		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
 		if(start+i == launcher.selected)
 			dc.rect([pos.x+sep-2, y], [size.w-sep, barHeight], colorSelected);
-		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart)+0.1.em, y+dc.font.height-1]); 
+		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart)+0.1.em, y+dc.font.height-1], start+i == launcher.selected); 
 	}
 	double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)options.lines).log2));
 	int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1.0 - start/(max(1.0, matches.length-options.lines))));
@@ -105,7 +106,7 @@ class XClient {
 	Atom utf8;
 	Window windowHandle;
 	int[2] size;
-	
+	long dt;
 
 	this(){
 		int screen = DefaultScreen(dc.dpy);
@@ -154,6 +155,7 @@ class XClient {
 		if(!open)
 			return;
 		assert(thread_isMainThread);
+		dt = Clock.currSystemTick.msecs;
 		dc.rect([0,0], size, colorBg);
 		int separator = size.w/4; //dc.textWidth(getcwd)*2;
 		drawInput([0, options.lines*barHeight+0.2.em], [size.w, barHeight], separator);

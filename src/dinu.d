@@ -43,6 +43,7 @@ struct Arguments {
 	@("-nb") string colorBg = "#111111";
 	@("-nf") string colorText = "#eeeeee";
 	@("-co") string colorOutput = "#cccccc";
+	@("-co") string colorOutputBg = "#222222";
 	@("-ce") string colorError = "#ff7777";
 	@("-sb") string colorSelected = "#005577";
 	@("-ch") string colorHint = "#777777";
@@ -89,6 +90,7 @@ void windowLoop(){
 	colorSelected = dc.color(options.colorSelected);
 	colorText = dc.fontColor(options.colorText);
 	colorOutput = dc.fontColor(options.colorOutput);
+	colorOutputBg = dc.fontColor(options.colorOutputBg);
 	colorError = dc.fontColor(options.colorError);
 	colorDir = dc.fontColor(options.colorDir);
 	colorFile = dc.fontColor(options.colorFile);

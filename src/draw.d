@@ -91,11 +91,13 @@ class DrawingContext {
 
 	void clip(int[2] pos, int[2] size){
 		auto rect = XRectangle(cast(short)pos[0], cast(short)pos[1], cast(short)size[0], cast(short)size[1]);
+		XftDrawSetClipRectangles(xftdraw, 0, 0, &rect, 1);
 		XSetClipRectangles(dpy, gc, 0, 0, &rect, 1, Unsorted);
 	}
 
 	void noclip(){
 		XSetClipMask(dpy, gc, None);
+		XftDrawSetClip(xftdraw, null);
 	}
 
 	int text(int[2] pos, string text, FontColor col, double offset=0){
@@ -242,6 +244,8 @@ extern(C){
 	void XftDrawDestroy(XftDraw*);
 	void XftDrawStringUtf8(XftDraw*, XftColor*, XftFont*, int, int, char*, int);
 	void XftDrawString32(XftDraw*, XftColor*, XftFont*, int, int, dchar*, int);
+	Bool XftDrawSetClipRectangles(XftDraw*, int, int, XRectangle*, int);
+	Bool XftDrawSetClip(XftDraw*, Region);
 	void XftColorFree(Display*, Visual*, Colormap, XftColor*);
 	Bool XftColorAllocName (Display*, Visual*, Colormap, char*, XftColor*);
 	XftFont* XftFontOpenName (Display*, int , char *);

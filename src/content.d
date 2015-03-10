@@ -31,7 +31,7 @@ void loadExecutables(void delegate(Command) addChoice){
 		auto desktops = getAll;
 		iterexecs:foreach(line; p.stdout.byLine){
 			foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
-				addChoice(new CommandDesktop(match.name, match.exec ~ " %U"));
+				addChoice(new CommandDesktop([match.name, match.exec ~ " %U"].bangJoin));
 				match.name = "";
 				continue iterexecs;
 			}
@@ -39,7 +39,7 @@ void loadExecutables(void delegate(Command) addChoice){
 		}
 		foreach(desktop; desktops){
 			if(desktop.name.length)
-				addChoice(new CommandDesktop(desktop.name, desktop.exec));
+				addChoice(new CommandDesktop([desktop.name, desktop.exec].bangJoin));
 		}
 		p.pid.wait;
 	}catch(Throwable t){
@@ -89,24 +89,31 @@ void loadFiles(string dir, void delegate(Command) addChoice, bool keepPre=false)
 
 
 CommandHistory[int] running;
+int[int] results;
 
 
 void matchLine(string line, size_t idx, void delegate(Command) addChoice){
 	foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
 		auto pid = to!int(match.captures[1]);
 		if(match.captures[2] == "exec"){
-			auto cmd = match.captures[3].match(`"((?:[^"]|\\")*)" "((?:[^"]|\\")*)" "((?:[^"]|\\")*)" "((?:[^"]|\\")*)"`);
-		auto history = new CommandHistory(to!Type(cmd.captures[1]), cmd.captures[2], cmd.captures[3], cmd.captures[4], idx);
-		running[pid] = history;
-		if(!exists("/proc/%s".format(pid)))
-			history.result = -1;
+			auto cmd = match.captures[3].bangSplit;
+			auto history = new CommandHistory(idx, pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
+			running[pid] = history;
+			if(pid in results){
+				history.result = results[pid];
+			}else if(!exists("/proc/%s".format(pid))){
+				history.result = -1;
+			}
 			addChoice(history);
-		}else if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
+		}
+		if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
 			//if(pid in running)
 			addChoice(new CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
 		}else if(match.captures[2] == "exit"){
 			if(pid in running)
 				running[pid].result = to!int(match.captures[3]);
+			else
+				results[pid] = to!int(match.captures[3]);
 		}
 	}
 }
@@ -131,7 +138,7 @@ void loadOutput(void delegate(Command) addChoice){
 		while(!log.exists || !client || !client.open)
 			core.thread.Thread.sleep(100.msecs);
 		auto file = new BufferedFile(log);
-		//file.seekEnd(-200);
+		file.seekEnd(0);
 		//file.position = max(0L, cast(long)file.size-4000L);
 		size_t idx = 10000;
 		task(&loadBackwards, addChoice, idx).executeInNewThread;
