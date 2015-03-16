@@ -18,6 +18,7 @@ import
 	dinu.xclient,
 	dinu.dinu,
 	dinu.content,
+	dinu.launcher,
 	draw;
 
 
@@ -32,7 +33,8 @@ enum Type {
 	history =   1<<2,
 	file =      1<<3,
 	directory = 1<<4,
-	output =    1<<5
+	output =    1<<5,
+	special =   1<<6
 
 }
 
@@ -92,7 +94,7 @@ class CommandFile: Command {
 		int x = 0;
 		if(selected && dc.textWidth(text) > client.size.w-pos.x){
 			int diff = dc.textWidth(text) - (client.size.w-pos.x);
-			x = cast(int)(diff*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
+			x = cast(int)(-20 + (diff + 40)*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
 		}
 		int advance = dc.text([pos.x-x, pos.y], text, color);
 		dc.noclip;
@@ -138,6 +140,69 @@ class CommandExec: CommandFile {
 
 }
 
+class CommandSpecial: CommandExec {
+
+	this(string name){
+		super(name);
+		this.name = name;
+		type = Type.special;
+		color = colorExec;
+
+	}
+
+	override void run(string params){
+		final switch(name){
+			case "cd":
+				chdir(params.expandTilde.unixClean);
+				std.file.write(options.configPath, getcwd);
+				break;
+			case "clear":
+				launcher.clearOutput;
+				break;
+			case ".":
+				this.spawnCommand("xdg-open .", "");
+				break;
+		}
+	}
+
+}
+
+class CommandDesktop: CommandFile {
+
+	string exec;
+
+	this(string args){
+		auto split = args.bangSplit;
+		name = split[0];
+		exec = split[1];
+		color = colorDesktop;
+		type = Type.desktop;
+	}
+
+	override string serialize(){
+		return [name, exec].bangJoin;
+	}
+
+	override int draw(int[2] pos, bool selected){
+		int r = super.draw(pos, selected);
+		dc.text([r+5, pos[1]], exec, colorHint);
+		return pos[0];
+	}
+
+	override size_t score(){
+		return 10;
+	}
+
+	override string filterText(){
+		return name ~ exec;
+	}
+
+	override void run(string params){
+		this.spawnCommand(exec.replace("%f", params).replace("%F", params).replace("%u", params).replace("%U", params));
+	}
+
+}
+
 class CommandHistory: CommandFile {
 
 	size_t idx;
@@ -149,7 +214,6 @@ class CommandHistory: CommandFile {
 	this(size_t idx, int pid, Type originalType, string serialized, string params){
 		this.idx = idx;
 		this.params = params;
-		this.name = serialized;
 		type = Type.history;
 		switch(originalType){
 			case Type.script:
@@ -164,13 +228,17 @@ class CommandHistory: CommandFile {
 			case Type.directory:
 				command = new CommandDir(serialized);
 				break;
+			case Type.special:
+				command = new CommandSpecial(serialized);
+				break;
 			default:
 				break;
 		}
+		this.name = command.text;
 	}
 
 	override size_t score(){
-		return idx*1000;
+		return idx*10;
 	}
 
 	override int draw(int[2] pos, bool selected){
@@ -213,17 +281,15 @@ class CommandOutput: CommandFile {
 	}
 
 	override size_t score(){
-		return idx*1000;
+		return idx*10;
 	}
 
 	override int draw(int[2] pos, bool selected){
 		if(!selected)
 			dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorOutputBg);
-		if(command.length){
-			dc.text(pos, command, colorHint, 1.45);
-		}else if(pid in running){
+		if(!command.length && pid in running)
 			command = running[pid].text;
-		}
+		dc.text(pos, command, colorHint, 1.45);
 		return super.draw(pos, selected);
 	}
 
@@ -235,43 +301,6 @@ class CommandOutput: CommandFile {
 	}
 
 }
-
-class CommandDesktop: CommandFile {
-
-	string exec;
-
-	this(string args){
-		auto split = args.bangSplit;
-		name = split[0];
-		exec = split[1];
-		color = colorDesktop;
-		type = Type.desktop;
-	}
-
-	override string serialize(){
-		return [name, exec].bangJoin;
-	}
-
-	override int draw(int[2] pos, bool selected){
-		int r = super.draw(pos, selected);
-		dc.text([r+5, pos[1]], exec, colorHint);
-		return pos[0];
-	}
-
-	override size_t score(){
-		return 100;
-	}
-
-	override string filterText(){
-		return exec ~ name;
-	}
-
-	override void run(string params){
-		this.spawnCommand(exec.replace("%f", params).replace("%F", params).replace("%u", params).replace("%U", params));
-	}
-
-}
-
 
 void spawnCommand(Command caller, string command, string arguments=""){
 	auto dg = {

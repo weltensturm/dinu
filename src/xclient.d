@@ -139,7 +139,6 @@ class XClient {
 		);
 		XMapRaised(dc.dpy, windowHandle);
 		dc.resizedc(size[0], size[1]);
-		draw;
 	}
 
 	void close(){

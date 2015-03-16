@@ -25,11 +25,20 @@ import
 __gshared:
 
 
+const string[] ignored = [
+	"cd", "clear", "."
+];
+
 void loadExecutables(void delegate(Command) addChoice){
 	try {
+		addChoice(new CommandSpecial("cd"));
+		addChoice(new CommandSpecial("clear"));
+		addChoice(new CommandSpecial("."));
 		auto p = pipeShell("compgen -ack -A function", Redirect.stdout);
 		auto desktops = getAll;
 		iterexecs:foreach(line; p.stdout.byLine){
+			if(ignored.canFind(line))
+				continue;
 			foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
 				addChoice(new CommandDesktop([match.name, match.exec ~ " %U"].bangJoin));
 				match.name = "";
@@ -41,6 +50,7 @@ void loadExecutables(void delegate(Command) addChoice){
 			if(desktop.name.length)
 				addChoice(new CommandDesktop([desktop.name, desktop.exec].bangJoin));
 		}
+
 		p.pid.wait;
 	}catch(Throwable t){
 		writeln(t);

@@ -102,6 +102,7 @@ void windowLoop(){
 	launcher = new Launcher;
 
 	client = new XClient;
+	client.draw;
 	scope(exit)
 		client.close;
 	client.grabKeyboard;

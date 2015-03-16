@@ -87,6 +87,11 @@ class Launcher {
 		return "";
 	}
 
+	void clearOutput(){
+		std.file.write(options.configPath ~ ".log", "");
+		choiceFilter.output = [];
+	}
+
 	void run(bool res=true){
 		if(!command.command){
 			command.finishPart;
@@ -95,6 +100,7 @@ class Launcher {
 				return;
 			}
 		}
+		/+
 		if(toString.startsWith("cd ")){
 			string cwd = toString[3..$].expandTilde.unixClean;
 			chdir(cwd);
@@ -104,12 +110,11 @@ class Launcher {
 			choiceFilter.startOver;
 			return;
 		}else if(toString.strip == "clear"){
-			std.file.write(options.configPath ~ ".log", "");
 			reset;
-			choiceFilter.output = [];
 			choiceFilter.startOver;
 			return;
-		}else if(command.command){
+		}else +/
+		if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
 			if(res)
 				choiceFilter.startOver;
@@ -287,9 +292,9 @@ class CommandPicker: Picker {
 		setSelected(-1);
 	}
 
-	override void update(){
-		setSelected(0);
-	}
+	//override void update(){
+		//setSelected(0);
+	//}
 
 	override void onDel(){
 		super.onDel;
@@ -301,12 +306,18 @@ class CommandPicker: Picker {
 		if(!text.length && selected<0)
 			return;
 		choiceFilter.wait;
-		command = choiceFilter.res[cast(size_t)selected].data;
+		if(!choiceFilter.res.length){
+			command = new CommandExec(text);
+		}else{
+			selected = (selected<0 ? 0 : selected);
+			command = choiceFilter.res[cast(size_t)selected].data;
+		}
 		text = command.text ~ ' ';
 		cursor = text.length;
 		launcher.next;
 	}
 
+	/+
 	override protected void setSelected(long selected){
 		auto res = choiceFilter.res;
 		long min = text.length ? 0 : -1;
@@ -316,6 +327,7 @@ class CommandPicker: Picker {
 			selected = res.length-1L;
 		this.selected = selected;
 	}
+	+/
 
 
 }
@@ -399,6 +411,7 @@ class ChoiceFilter {
 	}
 
 	void reset(string filter="", Type mode=Type.none){
+		filter = filter.expandTilde;
 		if(mode){
 			typeFilter = mode;
 		}else if(commandHistory){
@@ -408,7 +421,7 @@ class ChoiceFilter {
 		}else{
 			typeFilter = Type.file | Type.directory;
 			if(launcher && !launcher.params.length)
-				typeFilter = typeFilter | Type.script | Type.desktop;
+				typeFilter = typeFilter | Type.script | Type.desktop | Type.special;
 		}
 		restart = true;
 		synchronized(this){
@@ -564,7 +577,7 @@ long cmpFuzzy(string str, string sub){
 	//writeln(total, ' ', str, ' ', scores);
 	if(!largestScore)
 		return 0;
-	largestScore -= sub.levenshteinDistance(str)*4;
+	//largestScore -= sub.levenshteinDistance(str)*4;
 	if(!sub.startsWith(".") && (str.canFind("/.") || str.startsWith(".")))
 		largestScore -= 100;
 	if(sub == str)
