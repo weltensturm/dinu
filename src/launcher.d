@@ -359,6 +359,7 @@ class ChoiceFilter {
 		Type typeFilter;
 
 		string[] scannedDirs;
+		string[] scannedDirsTemp;
 
 	}
 
@@ -380,10 +381,11 @@ class ChoiceFilter {
 
 		permanent = [];
 		temporary = [];
+		scannedDirs = [];
 
 		auto taskExes = task(&loadExecutables, &addTemporary);
 		scannedDirs ~= getcwd;
-		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, false);
+		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, &dirLoaded, 2);
 		//auto taskOutput = task(&loadOutput, &addPermanent);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
@@ -423,6 +425,7 @@ class ChoiceFilter {
 			if(launcher && !launcher.params.length)
 				typeFilter = typeFilter | Type.script | Type.desktop | Type.special;
 		}
+		scannedDirsTemp = [];
 		restart = true;
 		synchronized(this){
 			narrowQueue = "";
@@ -488,8 +491,15 @@ class ChoiceFilter {
 		}
 
 		void addTemporary(Command p){
-			synchronized(this)
+			synchronized(this){
+				if(p.type == Type.directory){
+					if((scannedDirs~scannedDirsTemp).canFind(p.text))
+						return;
+					else
+						scannedDirsTemp ~= p.text;
+				}
 				temporary ~= p;
+			}
 			tryMatch(p);
 		}
 
@@ -535,8 +545,7 @@ class ChoiceFilter {
 					}else{
 						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
 						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
-							scannedDirs ~= dir;
-							task(&loadFiles, dir, &addTemporary, true).executeInNewThread;
+							task(&loadFiles, dir, &addTemporary, &dirLoaded, 0).executeInNewThread;
 						}
 						Thread.sleep(15.msecs);
 						//client.sendUpdate;
@@ -546,6 +555,13 @@ class ChoiceFilter {
 				writeln(t);
 		}
 	
+		bool dirLoaded(string s){
+			if((scannedDirs~scannedDirsTemp).canFind(s))
+				return true;
+			scannedDirs ~= s;
+			return false;
+		}
+
 	}
 
 }
@@ -579,7 +595,7 @@ long cmpFuzzy(string str, string sub){
 		return 0;
 	//largestScore -= sub.levenshteinDistance(str)*4;
 	if(!sub.startsWith(".") && (str.canFind("/.") || str.startsWith(".")))
-		largestScore -= 100;
+		largestScore -= 5;
 	if(sub == str)
 		largestScore += 10000000;
 	return largestScore;

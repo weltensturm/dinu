@@ -73,17 +73,18 @@ string unixClean(string path){
 }
 
 
-void loadFiles(string dir, void delegate(Command) addChoice, bool keepPre=false){
-	dir = dir.chomp("/") ~ "/";
+void loadFiles(string dir, void delegate(Command) addChoice, bool delegate(string) dirCompleted, int depth=0){
+	dir = dir.chompPrefix(getcwd ~ '/').chomp("/") ~ "/";
 	Command[] content;
-	foreach(i, entry; dir.expandTilde.dirContent(keepPre ? 0 : 2)){
-		string path;
-		if(keepPre)
-			path = buildNormalizedPath(entry).unixClean;
-		else
-			path = buildNormalizedPath(entry.chompPrefix(dir)).unixClean;
+	if(dirCompleted(dir))
+		return;
+	foreach(i, entry; dir.expandTilde.dirContent){
+		string path = buildNormalizedPath(entry).chompPrefix(getcwd ~ '/').unixClean;
 		try{
 			if(entry.isDir){
+				if(depth){
+					loadFiles(entry, addChoice, dirCompleted, depth-1);
+				}
 				addChoice(new CommandDir(path.unixEscape));
 			}else{
 				auto attr = getAttributes(path);
@@ -112,7 +113,7 @@ void matchLine(string line, size_t idx, void delegate(Command) addChoice){
 			if(pid in results){
 				history.result = results[pid];
 			}else if(!exists("/proc/%s".format(pid))){
-				history.result = -1;
+				history.result = 0;
 			}
 			addChoice(history);
 		}
@@ -167,19 +168,17 @@ void loadOutput(void delegate(Command) addChoice){
 }
 
 
-string[] dirContent(string dir, int depth=1){
+string[] dirContent(string dir){
 	string[] subdirs;
 	string[] res;
 	try{
 		foreach(entry; dir.dirEntries(SpanMode.shallow)){
-			if(entry.isDir && depth)
-				subdirs ~= entry;
 			res ~= entry;
 		}
 	}catch(Throwable e)
 		writeln("bad thing ", e);
-	foreach(subdir; subdirs)
-		res ~= subdir.dirContent(depth-1);
+	//foreach(subdir; subdirs)
+	//	res ~= subdir.dirContent(depth-1);
 	return res;
 }
 

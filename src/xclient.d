@@ -84,6 +84,8 @@ void drawMatches(int[2] pos, int[2] size, int sep){
 		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
 		if(start+i == launcher.selected)
 			dc.rect([pos.x+sep-2, y], [size.w-sep, barHeight], colorSelected);
+		else if(start+i == 0 && launcher.selected==-1 && !launcher.params.length && launcher.command.text.length)
+			dc.rect([pos.x+sep-2, y], [size.w-sep, barHeight], colorOutputBg);
 		match.data.draw([pos.x+sep+dc.textWidth(launcher.finishedPart)+0.1.em, y+dc.font.height-1], start+i == launcher.selected); 
 	}
 	double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)options.lines).log2));
@@ -120,13 +122,12 @@ class XClient {
 		size.w = options.w ? options.w : DisplayWidth(dc.dpy, screen);
 		size.h = options.h ? options.h : barHeight*(options.lines+1)+0.4.em;
 		swa.override_redirect = true;
-		swa.background_pixel = colorBg;
-		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
+		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask | StructureNotifyMask;
 		windowHandle = XCreateWindow(
-			dc.dpy, root, options.x, options.y, size[0], size[1], 0,
+			dc.dpy, root, options.x, options.y, size.w, size.h, 0,
 			DefaultDepth(dc.dpy, screen), CopyFromParent,
 			DefaultVisual(dc.dpy, screen),
-			CWOverrideRedirect | CWBackPixel | CWEventMask, &swa
+			CWOverrideRedirect |  CWEventMask, &swa
 		);
 		XClassHint hint;
 		hint.res_name = cast(char*)"dash";
@@ -138,7 +139,7 @@ class XClient {
 			XNClientWindow, windowHandle, XNFocusWindow, windowHandle, null
 		);
 		XMapRaised(dc.dpy, windowHandle);
-		dc.resizedc(size[0], size[1]);
+		dc.resizedc(size.w, size.h);
 	}
 
 	void close(){
@@ -155,7 +156,7 @@ class XClient {
 			return;
 		assert(thread_isMainThread);
 		dt = Clock.currSystemTick.msecs;
-		dc.rect([0,0], size, colorBg);
+		dc.rect([0,0], [size.w, size.h], colorBg);
 		int separator = size.w/4; //dc.textWidth(getcwd)*2;
 		drawInput([0, options.lines*barHeight+0.2.em], [size.w, barHeight], separator);
 		drawMatches([0, 0], [size.w, barHeight*options.lines], separator);
@@ -205,6 +206,13 @@ class XClient {
 						launcher.insert(p.to!string);
 						XFree(p);
 						draw;
+					}
+					break;
+				case ConfigureNotify:
+					if(size.x != ev.xconfigure.width || size.y != ev.xconfigure.height){
+						size.x = ev.xconfigure.width;
+						size.y = ev.xconfigure.height;
+						dc.resizedc(size.x, size.y);
 					}
 					break;
 				case VisibilityNotify:
@@ -269,9 +277,17 @@ class XClient {
 					launcher.cursor++;
 				return;
 			case XK_Tab:
+			case XK_Up:
+				if(!options.lines && !launcher.command.text.length){
+					options.lines = 15;
+					int height = options.h ? options.h : barHeight*(options.lines+1)+0.4.em;
+					XResizeWindow(dc.dpy, windowHandle, size.w, height);
+					//dc.resizedc(size[0], size[1]);
+				}
 				launcher.selectNext;
 				return;
 			case XK_ISO_Left_Tab:
+			case XK_Down:
 				launcher.selectPrev;
 				return;
 			case XK_Return:

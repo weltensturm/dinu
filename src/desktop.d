@@ -51,7 +51,10 @@ DesktopEntry[] getAll(){
 	foreach(path; desktopPaths){
 		if((path.expandTilde~"/share/applications").exists)
 			foreach(entry; (path.expandTilde~"/share/applications").dirEntries(SpanMode.breadth))
-				result ~= readDesktop(entry);
+				try
+					result ~= readDesktop(entry);
+				catch(Throwable t)
+					writeln("DESKTOP_ERROR %s: %s".format(entry, t));
 	}
 	return result;
 }

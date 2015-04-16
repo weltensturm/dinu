@@ -49,21 +49,9 @@ string bangJoin(string[] parts){
 
 
 class Command {
-	abstract int draw(int[2] pos, bool selected);
-	abstract string text();
-	abstract string filterText();
-	abstract string serialize();
-	//bool lessenScore();
-	abstract size_t score();
-	abstract void run(string params);
-	Type type;
-}
-
-
-class CommandFile: Command {
 
 	string name;
-	FontColor color;
+	Type type;
 
 	private this(){}
 
@@ -73,20 +61,56 @@ class CommandFile: Command {
 		color = colorFile;
 	}
 
-	override string serialize(){
+	string serialize(){
 		return name;
 	}
 
-	override string text(){
+	string text(){
 		return name;
 	}
 
-	override string filterText(){
+	string filterText(){
 		return name;
 	}
+
+	size_t score(){
+		return 0;
+	}
+
+	//bool lessenScore();
+	abstract void run(string params);
+
+	int draw(int[2] pos, bool selected){
+		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
+		int x = 0;
+		if(selected && dc.textWidth(text) > client.size.w-pos.x){
+			int diff = dc.textWidth(text) - (client.size.w-pos.x);
+			x = cast(int)(-20 + (diff + 40)*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
+		}
+		int advance = dc.text([pos.x-x, pos.y], text, color);
+		dc.noclip;
+		return pos.x+advance;
+	}
+
+	FontColor color;
+}
+
+
+class CommandFile: Command {
+
+	private this(){}
+
+	this(string name){
+		this.name = name;
+		type = Type.file;
+		color = colorFile;
+		parts = name.split('/');
+	}
+
+	string[] parts;
 
 	override size_t score(){
-		return 0;
+		return 10;
 	}
 
 	override int draw(int[2] pos, bool selected){
@@ -96,7 +120,14 @@ class CommandFile: Command {
 			int diff = dc.textWidth(text) - (client.size.w-pos.x);
 			x = cast(int)(-20 + (diff + 40)*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
 		}
-		int advance = dc.text([pos.x-x, pos.y], text, color);
+		int advance = 0;
+		foreach(i, part; parts){
+			if(i+1 < parts.length){
+				advance += dc.text([pos.x-x+advance, pos.y], part, colorDir);
+				advance += dc.text([pos.x-x+advance, pos.y], "/", colorOutput);
+			}else
+				advance += dc.text([pos.x-x+advance, pos.y], part, colorFile);
+		}
 		dc.noclip;
 		return pos.x+advance;
 	}
@@ -110,19 +141,22 @@ class CommandFile: Command {
 class CommandDir: CommandFile {
 
 	this(string name){
-		this.name = name;
 		type = Type.directory;
-		color = colorDir;
+		super(name);
+		parts ~= "";
 	}
 
 	override size_t score(){
-		return 2;
+		return 11;
 	}
 
+	override void run(string params){
+		this.spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
+	}
 
 }
 
-class CommandExec: CommandFile {
+class CommandExec: Command {
 
 	this(string name){
 		this.name = name;
@@ -155,6 +189,7 @@ class CommandSpecial: CommandExec {
 			case "cd":
 				chdir(params.expandTilde.unixClean);
 				std.file.write(options.configPath, getcwd);
+				log("%s exec %s!%s!%s".format(0, Type.special, serialize.replace("!", "\\!"), params.replace("!", "\\!")));
 				break;
 			case "clear":
 				launcher.clearOutput;
@@ -167,7 +202,7 @@ class CommandSpecial: CommandExec {
 
 }
 
-class CommandDesktop: CommandFile {
+class CommandDesktop: Command {
 
 	string exec;
 
@@ -190,7 +225,7 @@ class CommandDesktop: CommandFile {
 	}
 
 	override size_t score(){
-		return 10;
+		return 7;
 	}
 
 	override string filterText(){
@@ -203,7 +238,7 @@ class CommandDesktop: CommandFile {
 
 }
 
-class CommandHistory: CommandFile {
+class CommandHistory: Command {
 
 	size_t idx;
 	long result = long.max;
@@ -238,7 +273,7 @@ class CommandHistory: CommandFile {
 	}
 
 	override size_t score(){
-		return idx*10;
+		return idx*1000;
 	}
 
 	override int draw(int[2] pos, bool selected){
@@ -263,7 +298,7 @@ class CommandHistory: CommandFile {
 
 }
 
-class CommandOutput: CommandFile {
+class CommandOutput: Command {
 	
 	size_t idx;
 	string command;
@@ -281,7 +316,7 @@ class CommandOutput: CommandFile {
 	}
 
 	override size_t score(){
-		return idx*10;
+		return idx*1000;
 	}
 
 	override int draw(int[2] pos, bool selected){

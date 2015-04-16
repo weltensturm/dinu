@@ -25,6 +25,7 @@ struct FontColor {
 }
 
 struct Font {
+	string name;
 	int ascent;
 	int descent;
 	int height;
@@ -147,6 +148,7 @@ class DrawingContext {
 	void initfont(string fontstr){
 		char* def;
 		char** missing, names;
+		font.name = fontstr;
 		int i, n;
 		XFontStruct** xfonts;
 		font.xfont = XLoadQueryFont(dpy, cast(char*)fontstr);
@@ -160,7 +162,6 @@ class DrawingContext {
 			font.ascent = font.xfont.ascent;
 			font.descent = font.xfont.descent;
 			font.width   = font.xfont.max_bounds.width;
-			writeln("loaded X font " ~ fontstr);
 		}else if(font.set){
 			n = XFontsOfFontSet(font.set, &xfonts, &names);
 			for(i = 0; i < n; i++){
@@ -197,6 +198,7 @@ class DrawingContext {
 			if(!(xftdraw))
 				throw new Exception("error, cannot create xft drawable");
 		}
+		initfont(font.name);
 	}
 
 	int textWidth(string c){

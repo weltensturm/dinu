@@ -18,6 +18,8 @@ import
 	dinu.launcher,
 	dinu.command,
 	dinu.xclient,
+	dinu.xapp,
+	dinu.window,
 	desktop,
 	x11.X,
 	x11.Xlib,
@@ -47,10 +49,10 @@ struct Arguments {
 	@("-ce") string colorError = "#ff7777";
 	@("-sb") string colorSelected = "#005577";
 	@("-ch") string colorHint = "#777777";
-	@("-cd") string colorDir = "#aaffaa";
+	@("-cd") string colorDir = "#bbeebb";
 	@("-cf") string colorFile = "#eeeeee";
-	@("-ce") string colorExec = "#aaaaff";
-	@("-cd") string colorDesktop = "#acccff";
+	@("-ce") string colorExec = "#bbbbff";
+	@("-cd") string colorDesktop = "#bdddff";
 	@("-ci") string colorInputBg = "#333333";
 	@("-c") string configPath = "~/.dinu/default";
 
@@ -101,6 +103,8 @@ void windowLoop(){
 
 	launcher = new Launcher;
 
+	//auto window = new dinu.window.Window(new XApp, 500, 500);
+
 	client = new XClient;
 	client.draw;
 	scope(exit)
@@ -110,6 +114,8 @@ void windowLoop(){
 	while(client.open){
 		client.handleEvents;
 		client.draw;
+		//window.handleEvents;
+		//window.draw;
 		auto curr = Clock.currSystemTick.msecs;
 		last = curr;
 		Thread.sleep((15 - max(0, min(15, curr-last))).msecs);
