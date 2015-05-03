@@ -80,7 +80,7 @@ class Command {
 	//bool lessenScore();
 	abstract void run(string params);
 
-	int draw(int[2] pos, bool selected){
+	int draw(DrawingContext dc, int[2] pos, bool selected){
 		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
 		int x = 0;
 		if(selected && dc.textWidth(text) > client.size.w-pos.x){
@@ -113,7 +113,7 @@ class CommandFile: Command {
 		return 10;
 	}
 
-	override int draw(int[2] pos, bool selected){
+	override int draw(DrawingContext dc, int[2] pos, bool selected){
 		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
 		int x = 0;
 		if(selected && dc.textWidth(text) > client.size.w-pos.x){
@@ -218,8 +218,8 @@ class CommandDesktop: Command {
 		return [name, exec].bangJoin;
 	}
 
-	override int draw(int[2] pos, bool selected){
-		int r = super.draw(pos, selected);
+	override int draw(DrawingContext dc, int[2] pos, bool selected){
+		int r = super.draw(dc,  pos, selected);
 		dc.text([r+5, pos[1]], exec, colorHint);
 		return pos[0];
 	}
@@ -276,7 +276,7 @@ class CommandHistory: Command {
 		return idx*1000;
 	}
 
-	override int draw(int[2] pos, bool selected){
+	override int draw(DrawingContext dc, int[2] pos, bool selected){
 		//if(!selected)
 		//	dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorInputBg);
 		string hint;
@@ -288,7 +288,7 @@ class CommandHistory: Command {
 		}else
 			hint = "•";
 		dc.text(pos, hint, colorHint, 1.45);
-		pos.x = command.draw(pos, selected);
+		pos.x = command.draw(dc, pos, selected);
 		return dc.text(pos, ' ' ~ params, colorOutput);
 	}
 
@@ -319,13 +319,13 @@ class CommandOutput: Command {
 		return idx*1000;
 	}
 
-	override int draw(int[2] pos, bool selected){
-		if(!selected)
-			dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorOutputBg);
+	override int draw(DrawingContext dc, int[2] pos, bool selected){
+		//if(!selected)
+		//	dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorOutputBg);
 		if(!command.length && pid in running)
 			command = running[pid].text;
 		dc.text(pos, command, colorHint, 1.45);
-		return super.draw(pos, selected);
+		return super.draw(dc, pos, selected);
 	}
 
 	override void run(string params){

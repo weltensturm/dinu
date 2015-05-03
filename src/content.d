@@ -152,7 +152,7 @@ void loadOutput(void delegate(Command) addChoice){
 		file.seekEnd(0);
 		//file.position = max(0L, cast(long)file.size-4000L);
 		size_t idx = 10000;
-		task(&loadBackwards, addChoice, idx).executeInNewThread;
+		task(&loadBackwards, addChoice, idx-1000).executeInNewThread;
 		while(client.open){
 			if(!file.eof){
 				auto line = cast(string)file.readLine;

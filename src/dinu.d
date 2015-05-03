@@ -20,6 +20,7 @@ import
 	dinu.xclient,
 	dinu.xapp,
 	dinu.window,
+	dinu.resultWindow,
 	desktop,
 	x11.X,
 	x11.Xlib,
@@ -39,21 +40,39 @@ struct Arguments {
 	@("-y") int y;
 	@("-w") int w;
 	@("-h") int h;
-	@("-l") int lines = 15; // number of lines in vertical list
+	@("-l") int lines = 15;
 	@("-fn") string font = "Monospace-10";
-	@("-n") bool noNotify;
-	@("-nb") string colorBg = "#111111";
-	@("-nf") string colorText = "#eeeeee";
-	@("-co") string colorOutput = "#cccccc";
-	@("-co") string colorOutputBg = "#222222";
+
+	// dark theme
+	@("-nb") string colorBg = "#252525";
+	@("-nf") string colorText = "#ffffff";
+	@("-co") string colorOutput = "#eeeeee";
+	@("-co") string colorOutputBg = "#444444";
 	@("-ce") string colorError = "#ff7777";
 	@("-sb") string colorSelected = "#005577";
-	@("-ch") string colorHint = "#777777";
+	@("-ch") string colorHint = "#999999";
 	@("-cd") string colorDir = "#bbeebb";
 	@("-cf") string colorFile = "#eeeeee";
 	@("-ce") string colorExec = "#bbbbff";
 	@("-cd") string colorDesktop = "#bdddff";
-	@("-ci") string colorInputBg = "#333333";
+	@("-ci") string colorInputBg = "#555555";
+
+	/+
+	// light theme
+	@("-nb") string colorBg = "#dddddd";
+	@("-nf") string colorText = "#111111";
+	@("-co") string colorOutput = "#333333";
+	@("-co") string colorOutputBg = "#bbbbbb";
+	@("-ce") string colorError = "#aa0000";
+	@("-sb") string colorSelected = "#00aaff";
+	@("-ch") string colorHint = "#555555";
+	@("-cd") string colorDir = "#007700";
+	@("-cf") string colorFile = "#333333";
+	@("-ce") string colorExec = "#0000ff";
+	@("-cd") string colorDesktop = "#3333ff";
+	@("-ci") string colorInputBg = "#bbbbbb";
+	+/
+
 	@("-c") string configPath = "~/.dinu/default";
 
 	mixin cli!Arguments;
@@ -103,17 +122,24 @@ void windowLoop(){
 
 	launcher = new Launcher;
 
-	//auto window = new dinu.window.Window(new XApp, 500, 500);
-
 	client = new XClient;
 	client.draw;
-	scope(exit)
+
+	auto window = new ResultWindow(new XApp, [client.size.w/4, client.size.h+options.y], [500, 500], options);
+	window.draw;
+
+	scope(exit){
 		client.close;
+		window.close;
+		window.handleEvents;
+	}
 	client.grabKeyboard;
 	long last = Clock.currSystemTick.msecs;
-	while(client.open){
+	while(client.open && window.open){
 		client.handleEvents;
 		client.draw;
+		window.handleEvents;
+		window.draw;
 		//window.handleEvents;
 		//window.draw;
 		auto curr = Clock.currSystemTick.msecs;

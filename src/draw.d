@@ -190,15 +190,12 @@ class DrawingContext {
 		int screen = DefaultScreen(dpy);
 		if(canvas)
 			XFreePixmap(dpy, canvas);
-		w = w;
-		h = h;
 		canvas = XCreatePixmap(dpy, DefaultRootWindow(dpy), w, h, DefaultDepth(dpy, screen));
-		if(font.xft_font && !(xftdraw)){
-			xftdraw = XftDrawCreate(dpy, canvas, DefaultVisual(dpy,screen), DefaultColormap(dpy,screen));
-			if(!(xftdraw))
-				throw new Exception("error, cannot create xft drawable");
-		}
-		initfont(font.name);
+		xftdraw = XftDrawCreate(dpy, canvas, DefaultVisual(dpy,screen), DefaultColormap(dpy,screen));
+		if(!(xftdraw))
+			throw new Exception("error, cannot create xft drawable");
+		if(font.name.length)
+			initfont(font.name);
 	}
 
 	int textWidth(string c){

@@ -28,22 +28,8 @@ import
 __gshared:
 
 
-/+
-string[] getCompletions(string partial){
-	string trigger = "true || %s".format(partial);
-	auto pipes = pipeShell(`echo -e "%s\t\t" | bash -i`.format(trigger));
-	string output;
-	foreach(line; pipes.stderr.byLine)
-		output ~= line ~ '\n';
-	output = output[output.indexOf(trigger)+trigger.length..$];
-	if(output.canFind(trigger))
-		output = output[0..output.indexOf(trigger)];
-	writeln(output);
-	return [output];
-}
-+/
-
 ChoiceFilter choiceFilter;
+ChoiceFilter output;
 
 
 class Launcher {
@@ -56,12 +42,27 @@ class Launcher {
 	alias currentParam this;
 
 	this(){
-		choiceFilter = new ChoiceFilter;
+
+		choiceFilter = new ChoiceFilter((c){
+			if(choiceFilter && choiceFilter.commandHistory){
+				return c.type == Type.history;
+			}else if(launcher && launcher.text.length){
+				auto filter = [Type.file, Type.directory];
+				if(launcher && !launcher.params.length)
+					filter ~= [Type.script, Type.desktop, Type.special];
+				return filter.canFind(c.type);
+			}
+			return false;
+		});
+
+		output = new ChoiceFilter((c){
+			return c.type == Type.output || c.type == Type.history;
+		});
+
 		reset;
 	}
 
 	void reset(Type mode = Type.none){
-		//choiceFilter = new ChoiceFilter;
 		params = [];
 		command = new CommandPicker;
 		currentParam = command;
@@ -89,31 +90,16 @@ class Launcher {
 
 	void clearOutput(){
 		std.file.write(options.configPath ~ ".log", "");
-		choiceFilter.output = [];
+		output.output = [];
 	}
 
 	void run(bool res=true){
 		if(!command.command){
 			command.finishPart;
 			if(command.selected<0){
-				client.close;
 				return;
 			}
 		}
-		/+
-		if(toString.startsWith("cd ")){
-			string cwd = toString[3..$].expandTilde.unixClean;
-			chdir(cwd);
-			command.command.run(reduce!"a ~ b.text"("", params));
-			std.file.write(options.configPath.expandTilde, getcwd);
-			reset;
-			choiceFilter.startOver;
-			return;
-		}else if(toString.strip == "clear"){
-			reset;
-			choiceFilter.startOver;
-			return;
-		}else +/
 		if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
 			if(res)
@@ -122,22 +108,6 @@ class Launcher {
 		if(res)
 			reset;
 	}
-
-	/+
-	CommandHistory addHistory(Command command, string params){
-		synchronized(this){
-			auto history = new CommandHistory(command, params, logIdx++);
-			choiceFilter.addPermanent(history);
-			return history;
-		}
-	}
-
-	void addOutput(Command command, string output, bool err){
-		synchronized(this){
-			choiceFilter.addPermanent(new CommandOutput(command.text, output, logIdx++, err));
-		}
-	}
-	+/
 
 	void delBackChar(){
 		if(!currentParam.text.length){
@@ -193,14 +163,17 @@ class Picker {
 
 	protected void setSelected(long selected){
 		auto res = choiceFilter.res;
-		if(selected >= res.length)
+		auto output = output.res;
+		if(selected >= cast(long)res.length || selected < -1-cast(long)output.length)
 			selected = -1;
-		else if(selected < -1)
-			selected = res.length-1L;
-		if(selected != -1){
+		if(selected > -1){
 			if(!filterText.length)
 				filterText = text;
 			text = res[cast(size_t)selected].data.text;
+		}else if(selected < -1){
+			if(!filterText.length)
+				filterText = text;
+			text = output[cast(size_t)(-selected-2)].data.text;
 		}else if(filterText.length){
 			text = filterText;
 			filterText = "";
@@ -214,6 +187,7 @@ class Picker {
 	}
 
 	void selectPrev(){
+		writeln(selected-1);
 		setSelected(selected-1);
 		cursor = text.length;
 	}
@@ -292,10 +266,6 @@ class CommandPicker: Picker {
 		setSelected(-1);
 	}
 
-	//override void update(){
-		//setSelected(0);
-	//}
-
 	override void onDel(){
 		super.onDel;
 		if(!text.length)
@@ -316,19 +286,6 @@ class CommandPicker: Picker {
 		cursor = text.length;
 		launcher.next;
 	}
-
-	/+
-	override protected void setSelected(long selected){
-		auto res = choiceFilter.res;
-		long min = text.length ? 0 : -1;
-		if(selected >= cast(long)res.length)
-			selected = min;
-		else if(selected < min)
-			selected = res.length-1L;
-		this.selected = selected;
-	}
-	+/
-
 
 }
 
@@ -356,21 +313,22 @@ class ChoiceFilter {
 		bool restart;
 		bool idle = true;
 
-		Type typeFilter;
-
 		string[] scannedDirs;
 		string[] scannedDirsTemp;
+
+		bool delegate(Command) filterFunc;
 
 	}
 
 	bool commandHistory;
 
-	this(){
+	this(bool delegate(Command) filterFunc){
 		task(&loadOutput, (Command c){
 			synchronized(this)
 				output ~= c;
 			tryMatch(c);
 		}).executeInNewThread;
+		this.filterFunc = filterFunc;
 		startOver;
 	}
 
@@ -386,10 +344,8 @@ class ChoiceFilter {
 		auto taskExes = task(&loadExecutables, &addTemporary);
 		scannedDirs ~= getcwd;
 		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, &dirLoaded, 2);
-		//auto taskOutput = task(&loadOutput, &addPermanent);
 		taskExes.executeInNewThread;
 		taskFiles.executeInNewThread;
-		//taskOutput.executeInNewThread;
 		waitLoad = {
 			while(!taskExes.done || !taskFiles.done)
 				Thread.sleep(10.msecs);
@@ -401,30 +357,10 @@ class ChoiceFilter {
 	}
 
 	void wait(){
-		/+
-		writeln("waiting");
-		waitLoad();
-		while(!idle)
-			Thread.sleep(10.msecs);
-		idle = false;
-		writeln("done");
-		idle = true;
-		+/
 	}
 
 	void reset(string filter="", Type mode=Type.none){
 		filter = filter.expandTilde;
-		if(mode){
-			typeFilter = mode;
-		}else if(commandHistory){
-			typeFilter = Type.history;
-		}else if(!filter.length && (!launcher || !launcher.params.length)){
-			typeFilter = Type.output | Type.history;
-		}else{
-			typeFilter = Type.file | Type.directory;
-			if(launcher && !launcher.params.length)
-				typeFilter = typeFilter | Type.script | Type.desktop | Type.special;
-		}
 		scannedDirsTemp = [];
 		restart = true;
 		synchronized(this){
@@ -504,7 +440,7 @@ class ChoiceFilter {
 		}
 
 		void tryMatch(Command p){
-			if(typeFilter && !(p.type & typeFilter))
+			if(!filterFunc(p))
 				return;
 			Match match;
 			match.score = p.filterText.cmpFuzzy(filter);
@@ -515,13 +451,11 @@ class ChoiceFilter {
 					foreach(i, e; matches){
 						if(e.score < match.score){
 							matches = matches[0..i] ~ match ~ matches[i..$];
-							//client.sendUpdate;
 							return;
 						}
 					}
 					matches = matches ~ match;
 				}
-				//client.sendUpdate;
 			}
 		}
 
@@ -531,24 +465,19 @@ class ChoiceFilter {
 				while(true){
 					if(narrowQueue.length){
 						synchronized(this){
-							//writeln("narrow queue ", narrowQueue, " ", typeFilter);
 							filter ~= narrowQueue;
 							narrowQueue = "";
 						}
 						intNarrow(filter);
-						//client.sendUpdate;
 					}else if(restart){
-						//writeln("restart ", filter, " ", typeFilter);
 						intReset(filter);
 						restart = false;
-						//client.sendUpdate;
 					}else{
 						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
 						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
 							task(&loadFiles, dir, &addTemporary, &dirLoaded, 0).executeInNewThread;
 						}
 						Thread.sleep(15.msecs);
-						//client.sendUpdate;
 					}
 				}
 			}catch(Throwable t)
@@ -588,12 +517,8 @@ long cmpFuzzy(string str, string sub){
 				largestScore = score-i+sub.length;
 		}
 	}
-	//score -= phoneticalScore(str);
-	//score -= abs(sub.icmp(str));
-	//writeln(total, ' ', str, ' ', scores);
 	if(!largestScore)
 		return 0;
-	//largestScore -= sub.levenshteinDistance(str)*4;
 	if(!sub.startsWith(".") && (str.canFind("/.") || str.startsWith(".")))
 		largestScore -= 5;
 	if(sub == str)
