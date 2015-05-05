@@ -8,5 +8,6 @@
 	"dependencies": {
 		"x11": ">=1.0.1"
 	},
+	"libs-posix": ["Xft"],
 	"sourcePaths": ["src"]
 }
