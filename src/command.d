@@ -52,13 +52,14 @@ class Command {
 
 	string name;
 	Type type;
+	string color;
 
 	private this(){}
 
 	this(string name){
 		this.name = name;
 		type = Type.file;
-		color = colorFile;
+		color = options.colorFile;
 	}
 
 	string serialize(){
@@ -77,22 +78,16 @@ class Command {
 		return 0;
 	}
 
-	//bool lessenScore();
+	string parameter(){
+		return "";
+	}
+
 	abstract void run(string params);
 
 	int draw(DrawingContext dc, int[2] pos, bool selected){
-		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
-		int x = 0;
-		if(selected && dc.textWidth(text) > client.size.w-pos.x){
-			int diff = dc.textWidth(text) - (client.size.w-pos.x);
-			x = cast(int)(-20 + (diff + 40)*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
-		}
-		int advance = dc.text([pos.x-x, pos.y], text, color);
-		dc.noclip;
-		return pos.x+advance;
+		return pos.x + dc.text(pos, text, color);
 	}
 
-	FontColor color;
 }
 
 
@@ -103,7 +98,7 @@ class CommandFile: Command {
 	this(string name){
 		this.name = name;
 		type = Type.file;
-		color = colorFile;
+		color = options.colorFile;
 		parts = name.split('/');
 	}
 
@@ -114,21 +109,14 @@ class CommandFile: Command {
 	}
 
 	override int draw(DrawingContext dc, int[2] pos, bool selected){
-		dc.clip([pos.x, pos.y-dc.font.height+1], [client.size.w-pos.x, barHeight]);
-		int x = 0;
-		if(selected && dc.textWidth(text) > client.size.w-pos.x){
-			int diff = dc.textWidth(text) - (client.size.w-pos.x);
-			x = cast(int)(-20 + (diff + 40)*(min(1.0, max(-1.0, sin(client.dt/sqrt(diff*6283.1))))+1)/2);
-		}
 		int advance = 0;
 		foreach(i, part; parts){
 			if(i+1 < parts.length){
-				advance += dc.text([pos.x-x+advance, pos.y], part, colorDir);
-				advance += dc.text([pos.x-x+advance, pos.y], "/", colorOutput);
+				advance += dc.text([pos.x+advance, pos.y], part, options.colorDir);
+				advance += dc.text([pos.x+advance, pos.y], "/", options.colorOutput);
 			}else
-				advance += dc.text([pos.x-x+advance, pos.y], part, colorFile);
+				advance += dc.text([pos.x+advance, pos.y], part, options.colorFile);
 		}
-		dc.noclip;
 		return pos.x+advance;
 	}
 
@@ -161,7 +149,7 @@ class CommandExec: Command {
 	this(string name){
 		this.name = name;
 		type = Type.script;
-		color = colorExec;
+		color = options.colorExec;
 	}
 
 	override size_t score(){
@@ -180,7 +168,7 @@ class CommandSpecial: CommandExec {
 		super(name);
 		this.name = name;
 		type = Type.special;
-		color = colorExec;
+		color = options.colorExec;
 
 	}
 
@@ -210,7 +198,7 @@ class CommandDesktop: Command {
 		auto split = args.bangSplit;
 		name = split[0];
 		exec = split[1];
-		color = colorDesktop;
+		color = options.colorDesktop;
 		type = Type.desktop;
 	}
 
@@ -220,7 +208,7 @@ class CommandDesktop: Command {
 
 	override int draw(DrawingContext dc, int[2] pos, bool selected){
 		int r = super.draw(dc,  pos, selected);
-		dc.text([r+5, pos[1]], exec, colorHint);
+		dc.text([r+5, pos[1]], exec, options.colorHint);
 		return pos[0];
 	}
 
@@ -277,8 +265,6 @@ class CommandHistory: Command {
 	}
 
 	override int draw(DrawingContext dc, int[2] pos, bool selected){
-		//if(!selected)
-		//	dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorInputBg);
 		string hint;
 		if(result != long.max){
 			if(result)
@@ -287,9 +273,13 @@ class CommandHistory: Command {
 				hint = "";
 		}else
 			hint = "•";
-		dc.text(pos, hint, colorHint, 1.45);
+		dc.text(pos, hint, options.colorHint, 1.45);
 		pos.x = command.draw(dc, pos, selected);
-		return dc.text(pos, ' ' ~ params, colorOutput);
+		return dc.text(pos, ' ' ~ params, options.colorOutput);
+	}
+
+	override string parameter(){
+		return params;
 	}
 
 	override void run(string params){
@@ -305,14 +295,14 @@ class CommandOutput: Command {
 	int pid;
 
 	this(int pid, string output, size_t idx, bool err){
-		super(output.dup); // fucking garbage collector doesn't know its place
+		super(output);
 		type = Type.output;
 		this.pid = pid;
 		this.idx = idx;
 		if(err)
-			color = colorError;
+			color = options.colorError;
 		else
-			color = colorOutput;
+			color = options.colorOutput;
 	}
 
 	override size_t score(){
@@ -320,18 +310,19 @@ class CommandOutput: Command {
 	}
 
 	override int draw(DrawingContext dc, int[2] pos, bool selected){
-		//if(!selected)
-		//	dc.rect([pos.x-4, pos.y-dc.font.height+1], [client.size.w-pos.x+4, barHeight], colorOutputBg);
 		if(!command.length && pid in running)
 			command = running[pid].text;
-		dc.text(pos, command, colorHint, 1.45);
+		dc.text(pos, command, options.colorHint, 1.45);
 		return super.draw(dc, pos, selected);
 	}
 
 	override void run(string params){
 		auto command = new CommandExec("echo");
-		command.run("'%s' | xsel -ib".format(
-			text.strip.replace("'", "'\\''")
+		if(!params.length)
+			params = "xsel -ib";
+		command.run("'%s' | %s".format(
+			text.strip.replace("'", "'\\''"),
+			params
 		));
 	}
 

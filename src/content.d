@@ -133,10 +133,10 @@ void matchLine(string line, size_t idx, void delegate(Command) addChoice){
 void loadBackwards(void delegate(Command) addChoice, size_t idx){
 	auto p = pipeProcess(["tac", options.configPath ~ ".log"], Redirect.stdout);
 	foreach(line; p.stdout.byLine){
-		matchLine(cast(string)line, idx--, addChoice);
+		matchLine(to!string(line), idx--, addChoice);
 		if(idx<10000-100)
 			core.thread.Thread.sleep(1.msecs);
-		else if(idx<0 || !client.open)
+		else if(idx<0 || !runProgram)
 			return;
 	}
 	p.pid.wait;
@@ -146,14 +146,14 @@ void loadBackwards(void delegate(Command) addChoice, size_t idx){
 void loadOutput(void delegate(Command) addChoice){
 	try{
 		auto log = options.configPath ~ ".log";
-		while(!log.exists || !client || !client.open)
+		while(!log.exists && runProgram)
 			core.thread.Thread.sleep(100.msecs);
 		auto file = new BufferedFile(log);
 		file.seekEnd(0);
 		//file.position = max(0L, cast(long)file.size-4000L);
 		size_t idx = 10000;
 		task(&loadBackwards, addChoice, idx-1000).executeInNewThread;
-		while(client.open){
+		while(runProgram){
 			if(!file.eof){
 				auto line = cast(string)file.readLine;
 				if(!line.length)
@@ -161,6 +161,18 @@ void loadOutput(void delegate(Command) addChoice){
 				matchLine(line, idx++, addChoice);
 			}else
 				core.thread.Thread.sleep(5.msecs);
+		}
+	}catch(Throwable e){
+		writeln(e);
+	}
+}
+
+
+void loadParams(string command, void delegate(Command) addChoice){
+	try{
+		auto p = pipeShell("~/complete.sh '%s'".format(command), Redirect.stdout);
+		foreach(line; p.stdout.byLine){
+			addChoice(new CommandFile(line.to!string));
 		}
 	}catch(Throwable e){
 		writeln(e);

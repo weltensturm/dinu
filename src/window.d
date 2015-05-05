@@ -1,71 +1,110 @@
 module dinu.window;
 
 import
-	dinu.xapp,
+	std.conv,
 	draw,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
 	x11.keysymdef;
 
+
+__gshared:
+
+
 class Window {
  
-	XApp wm;
 	x11.X.Window handle;
-	bool open;
 	int[2] pos;
 	int[2] size;
 	DrawingContext dc;
 	bool active;
+	Display* display;
+	Atom clip;
+	Atom utf8;
+	int screen;
+	XIC xic;
 
-	this(XApp wm, int[2] pos, int[2] size){
-		this.wm = wm;
-		auto screen = DefaultScreen(wm.display);
+	this(int screen, int[2] pos, int[2] size){
+		display = XOpenDisplay(null);
+		this.screen = screen;
 		XSetWindowAttributes attributes;
 		attributes.override_redirect = true;
 		attributes.background_pixel = true;
 		attributes.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask | StructureNotifyMask;
 		handle = XCreateWindow(
-			wm.display,
-			RootWindow(wm.display, screen),
+			display,
+			RootWindow(display, screen),
 			pos[0],
 			pos[1],
 			size[0],
 			size[1],
 			0,
-			DefaultDepth(wm.display, screen),
+			DefaultDepth(display, screen),
 			CopyFromParent,
-			DefaultVisual(wm.display, screen),
-			CWOverrideRedirect | CWBackPixel | CWEventMask,
+			DefaultVisual(display, screen),
+			CWOverrideRedirect | CWEventMask,
 			&attributes
+		);
+		clip = XInternAtom(display, "CLIPBOARD", false);
+		utf8 = XInternAtom(display, "UTF8_STRING", false);
+		auto xim = XOpenIM(display, null, null, null);
+		xic = XCreateIC(
+			xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
+			XNClientWindow, handle, XNFocusWindow, handle, null
 		);
 		this.pos = pos;
 		this.size = size;
 		dc = new DrawingContext;
-		dc.resizedc(size[0], size[1]);
-		open = true;
+		dc.resize(size);
 	}
 
 	void handleEvents(){
 		XEvent ev;
-		while(XPending(wm.display)){
-			XNextEvent(wm.display, &ev);
+		while(XPending(display)){
+			XNextEvent(display, &ev);
 			if(XFilterEvent(&ev, handle))
 				continue;
 			switch(ev.type){
+				case KeyPress:
+					onKey(&ev.xkey);
+					break;
+				case Expose:
+					if(ev.xexpose.count == 0)
+						draw;
+					break;
 				case VisibilityNotify:
 					if(ev.xvisibility.state != VisibilityUnobscured)
-						XRaiseWindow(wm.display, handle);
+						XRaiseWindow(display, handle);
+					draw;
 					break;
 				case ConfigureNotify:
 					if(size[0] != ev.xconfigure.width || size[1] != ev.xconfigure.height){
 						size[0] = ev.xconfigure.width;
 						size[1] = ev.xconfigure.height;
-						dc.resizedc(size[0], size[1]);
+						dc.resize(size);
+						draw;
 					}
 					if(pos[0] != ev.xconfigure.x || pos[1] != ev.xconfigure.y){
 						pos[0] = ev.xconfigure.x;
 						pos[1] = ev.xconfigure.y;
+					}
+					break;
+				case ClientMessage:
+					draw;
+					break;
+				case SelectionNotify:
+					if(ev.xselection.property == utf8){
+						char* p;
+						int actualFormat;
+						size_t count;
+						Atom actualType;
+						XGetWindowProperty(
+							display, handle, utf8, 0, 1024, false, utf8,
+							&actualType, &actualFormat, &count, &count, cast(ubyte**)&p
+						);
+						onPaste(p.to!string);
+						XFree(p);
 					}
 					break;
 				default:break;
@@ -73,40 +112,49 @@ class Window {
 		}
 	}
 
+	void onPaste(string text){}
+
+	void onKey(XKeyEvent* ev){}
+
 	void hide(){
 		if(!active)
 			return;
-		XUnmapWindow(wm.display, handle);
+		XUnmapWindow(display, handle);
 		active = false;
 	}
 
 	void show(){
 		if(active)
 			return;
-		XMapWindow(wm.display, handle);
+		XMapWindow(display, handle);
 		active = true;
 	}
 
+	void destroy(){
+		dc.destroy;
+		XDestroyWindow(display, handle);
+		XUngrabKeyboard(display, CurrentTime);
+	}
+
 	void resize(int[2] size){
-		XResizeWindow(wm.display, handle, size[0], size[1]);
+		XResizeWindow(display, handle, size[0], size[1]);
 		this.size = size;
+		dc.resize(size);
 	}
 
 	void move(int[2] pos){
-		XMoveWindow(wm.display, handle, pos[0], pos[1]);
+		XMoveWindow(display, handle, pos[0], pos[1]);
 		this.pos = pos;
 	}
 
-	void close(){
-		if(!open)
-			return;
-		open = false;
-		//XUnmapWindow(wm.display, handle);
-		XDestroyWindow(wm.display, handle);
-	}
-
 	void draw(){
+		dc.map(handle, size);
 	}
 
+}
+
+
+shared static this(){
+	XInitThreads();
 }
 

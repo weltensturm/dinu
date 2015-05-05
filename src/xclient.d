@@ -13,35 +13,16 @@ import
 	core.thread,
 	draw,
 	cli,
+	dinu.window,
 	dinu.launcher,
 	dinu.command,
 	dinu.dinu,
 	desktop,
 	x11.X,
 	x11.Xlib,
-	x11.Xutil,
 	x11.keysymdef;
 
 __gshared:
-
-int barHeight;
-
-FontColor colorBg;
-FontColor colorSelected;
-FontColor colorText;
-FontColor colorOutput;
-FontColor colorOutputBg;
-FontColor colorError;
-FontColor colorDir;
-FontColor colorFile;
-FontColor colorExec;
-FontColor colorHint;
-FontColor colorDesktop;
-FontColor colorInputBg;
-Launcher launcher;
-
-DrawingContext dc;
-XClient client;
 
 
 
@@ -55,181 +36,71 @@ ref T y(T)(ref T[2] a){
 }
 alias h = y;
 
+
+private double em1;
+
 int em(double mod){
-	return cast(int)(round(dc.font.height*1.3*mod));
+	return cast(int)(round(em1*1.3*mod));
 }
 
-void drawInput(int[2] pos, int[2] size, int sep){
-	dc.rect([sep, pos.y], [size.w/2, size.h], colorInputBg);
-	// cwd
-	dc.text([pos.x+sep, pos.y+dc.font.height-1+0.2.em], getcwd, colorHint, 1.4);
-	/+
-	if(choiceFilter.commandHistory){
-		dc.rect(pos, [sep-3, size.h], colorSelected);
-		dc.text([pos.x+sep-0.1.em, pos.y+dc.font.height-1+0.2.em], getcwd ~ " | command history", colorOutput, 1.4);
-	}else{
-		dc.rect(pos, [sep-3, size.h], colorHint);
-		dc.text([pos.x+sep-0.1.em, pos.y+dc.font.height-1+0.2.em], getcwd, colorBg, 1.4);
-	}
-	+/
-	// input
-	dc.text([pos.x+sep+0.2.em, pos.y+dc.font.height-1+0.2.em], launcher.toString, colorText);
-	// cursor
-	int offset = dc.textWidth(launcher.finishedPart);
-	int curpos = pos.x+sep+offset+0.2.em + dc.textWidth(launcher.toString[0..launcher.cursor]);
-	dc.rect([curpos, pos.y+0.2.em], [1, size.y-0.4.em], colorText.id);
-}
 
-void drawMatches(int[2] pos, int[2] size, int sep){
-	auto matches = output.res;
-	auto selected = launcher.selected < -1 ? -launcher.selected-2 : -1;
-	long start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
-	foreach(i, match; matches[start..min($, start+options.lines)]){
-		int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
-		if(start+i == selected)
-			dc.rect([pos.x+sep-2, y], [size.w/2, barHeight], colorOutputBg);
-		match.data.draw(dc, [pos.x+sep+0.1.em, y+dc.font.height-1], start+i == selected); 
-	}
-	/+
-	double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)options.lines).log2));
-	int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1.0 - start/(max(1.0, matches.length-options.lines))));
-	dc.rect([pos.x+sep-4, pos.y], [2, barHeight*options.lines], colorInputBg.id);
-	if(matches.length){
-		dc.rect([pos.x+sep-4, pos.y+scrollbarOffset], [2, cast(int)scrollbarHeight], colorSelected);
-	}
-	+/
-}
-
-class XClient {
-
-	bool open = true;
-	XIC xic;
-	Atom clip;
-	Atom utf8;
-	Window windowHandle;
-	int[2] size;
-	long dt;
+class XClient: dinu.window.Window {
 
 	this(){
-		int screen = DefaultScreen(dc.dpy);
-		int dimx, dimy, dimw, dimh;
-		Window root = RootWindow(dc.dpy, screen);
-		XSetWindowAttributes swa;
-		XIM xim;
-		clip = XInternAtom(dc.dpy, "CLIPBOARD",	false);
-		utf8 = XInternAtom(dc.dpy, "UTF8_STRING", false);
-		barHeight = 1.em;
-		size.w = options.w ? options.w : DisplayWidth(dc.dpy, screen);
-		size.h = options.h ? options.h : barHeight*(options.lines+1)+0.8.em;
-		swa.override_redirect = true;
-		swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask | StructureNotifyMask;
-		windowHandle = XCreateWindow(
-			dc.dpy, root, options.x, options.y, size.w, size.h, 0,
-			DefaultDepth(dc.dpy, screen), CopyFromParent,
-			DefaultVisual(dc.dpy, screen),
-			CWOverrideRedirect |  CWEventMask, &swa
-		);
-		XClassHint hint;
-		hint.res_name = cast(char*)"dash";
-		hint.res_class = cast(char*)"Dash";
-		XSetClassHint(dc.dpy, windowHandle, &hint);
-		xim = XOpenIM(dc.dpy, null, null, null);
-		xic = XCreateIC(
-			xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
-			XNClientWindow, windowHandle, XNFocusWindow, windowHandle, null
-		);
-		XMapRaised(dc.dpy, windowHandle);
-		dc.resizedc(size.w, size.h);
+		super(options.screen, [options.x, options.y], [1,1]);
+		dc.initfont(options.font);
+		em1 = dc.font.height;
+		resize([
+			options.w ? options.w : DisplayWidth(display, screen),
+			options.h ? options.h : 1.em*(options.lines+1)+0.8.em
+		]);
+		show;
+		grabKeyboard;
 	}
 
-	void close(){
-		if(!open)
-			return;
-		open = false;
-		//XUnmapWindow(dc.dpy, windowHandle);
-		XUngrabKeyboard(dc.dpy, CurrentTime);
-		XDestroyWindow(dc.dpy, windowHandle);
-	}
-
-	void draw(){
-		if(!open)
+	override void draw(){
+		if(!active)
 			return;
 		assert(thread_isMainThread);
-		dt = Clock.currSystemTick.msecs;
-		dc.rect([0,0], [size.w, size.h], colorBg);
-		int separator = size.w/4; //dc.textWidth(getcwd)*2;
-		drawInput([0, options.lines*barHeight+0.2.em], [size.w, 1.4.em], separator);
-		drawMatches([0, 0], [size.w, barHeight*options.lines], separator);
-		dc.mapdc(windowHandle, size.w, size.h);
+		dc.rect([0,0], [size.w, size.h], options.colorBg);
+		int separator = size.w/4;
+		drawInput([0, options.lines*1.em+0.2.em], [size.w, 1.4.em], separator);
+		drawMatches([0, 0], [size.w, 1.em*options.lines], separator);
+		super.draw;
 	}
 
-
-	void sendUpdate(){
-		if(!dc.dpy || !windowHandle || !open)
-			return;
-		if(lastUpdate+10 > Clock.currSystemTick.msecs)
-			return;
-		lastUpdate = Clock.currSystemTick.msecs;
-		XClientMessageEvent ev;
-		ev.type = ClientMessage;
-		ev.format = 8;
-		XSendEvent(dc.dpy, windowHandle, false, 0, cast(XEvent*)&ev);
-		XFlush(dc.dpy);
+	void drawInput(int[2] pos, int[2] size, int sep){
+		dc.rect([sep, pos.y], [size.w/2, size.h], options.colorInputBg);
+		// cwd
+		dc.text([pos.x+sep, pos.y+dc.font.height-1+0.2.em], getcwd, options.colorHint, 1.4);
+		dc.clip([pos.x+size.w/4, pos.y], [size.w/2, size.h]);
+		int textWidth = dc.textWidth(launcher.toString[0..launcher.cursor] ~ ".");
+		int offset = -max(0, textWidth-size.w/2);
+		// input
+		dc.text([offset+pos.x+sep+0.2.em, pos.y+dc.font.height-1+0.2.em], launcher.toString, options.colorInput);
+		// cursor
+		int cursorOffset = dc.textWidth(launcher.finishedPart);
+		int curpos = offset+pos.x+sep+cursorOffset+0.2.em + dc.textWidth(launcher.toString[0..launcher.cursor]);
+		dc.rect([curpos, pos.y+0.2.em], [1, size.y-0.4.em], options.colorInput);
+		dc.noclip;
 	}
 
-	void handleEvents(){
-		XEvent ev;
-		while(XPending(dc.dpy)){
-			XNextEvent(dc.dpy, &ev);
-		//while(open && !XNextEvent(dc.dpy, &ev)){
-			if(XFilterEvent(&ev, windowHandle))
-				continue;
-			switch(ev.type){
-				case Expose:
-					//if(ev.xexpose.count == 0)
-					//	dc.mapdc(windowHandle, size[0], size[1]);
-					break;
-				case KeyPress:
-					onKey(&ev.xkey);
-					draw;
-					break;
-				case SelectionNotify:
-					if(ev.xselection.property == utf8){
-						char* p;
-						int actualFormat;
-						size_t count;
-						Atom actualType;
-						XGetWindowProperty(
-							dc.dpy, windowHandle, utf8, 0, 1024, false, utf8,
-							&actualType, &actualFormat, &count, &count, cast(ubyte**)&p
-						);
-						launcher.insert(p.to!string);
-						XFree(p);
-						draw;
-					}
-					break;
-				case ConfigureNotify:
-					if(size.x != ev.xconfigure.width || size.y != ev.xconfigure.height){
-						size.x = ev.xconfigure.width;
-						size.y = ev.xconfigure.height;
-						dc.resizedc(size.x, size.y);
-					}
-					break;
-				case VisibilityNotify:
-					if(ev.xvisibility.state != VisibilityUnobscured)
-						XRaiseWindow(dc.dpy, windowHandle);
-					break;
-				case ClientMessage:
-					draw;
-					break;
-				default: break;
-			}
+	void drawMatches(int[2] pos, int[2] size, int sep){
+		dc.rect(pos, size, options.colorOutputBg);
+		auto matches = output.res;
+		auto selected = launcher.selected < -1 ? -launcher.selected-2 : -1;
+		long start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
+		foreach(i, match; matches[start..min($, start+options.lines)]){
+			int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
+			if(start+i == selected)
+				dc.rect([pos.x+sep, y], [size.w/2, 1.em], options.colorHintBg);
+			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);
+			match.data.draw(dc, [pos.x+sep+0.1.em, y+dc.font.height-1], start+i == selected);
+			dc.noclip;
 		}
 	}
 
-	private long lastUpdate;
-
-	void onKey(XKeyEvent* ev){
+	override void onKey(XKeyEvent* ev){
 		char[5] buf;
 		KeySym key;
 		Status status;
@@ -253,14 +124,14 @@ class XClient {
 					return;
 				case XK_V:
 				case XK_v:
-					XConvertSelection(dc.dpy, clip, utf8, utf8, windowHandle, CurrentTime);
+					XConvertSelection(display, clip, utf8, utf8, handle, CurrentTime);
 					return;
 				default:
 					break;
 			}
 		switch(key){
 			case XK_Escape:
-				close;
+				destroy;
 				return;
 			case XK_Delete:
 				launcher.delChar;
@@ -269,12 +140,10 @@ class XClient {
 				launcher.delBackChar;
 				return;
 			case XK_Left:
-				if(launcher.cursor > 0)
-					launcher.cursor--;
+				launcher.moveLeft((ev.state & ControlMask) != 0);
 				return;
 			case XK_Right:
-				if(launcher.cursor < launcher.text.length)
-					launcher.cursor++;
+				launcher.moveRight((ev.state & ControlMask) != 0);
 				return;
 			case XK_Tab:
 			case XK_Down:
@@ -282,23 +151,22 @@ class XClient {
 				return;
 			case XK_ISO_Left_Tab:
 			case XK_Up:
-				if(!options.lines && !launcher.command.text.length){
+				if(!options.lines && launcher.selected == -1){
 					options.lines = 15;
-					int height = options.h ? options.h : barHeight*(options.lines+1)+0.8.em-1;
-					XResizeWindow(dc.dpy, windowHandle, size.w, height);
-					//dc.resizedc(size[0], size[1]);
-				}
-				launcher.selectPrev;
+					int height = options.h ? options.h : 1.em*(options.lines+1)+0.8.em-1;
+					XResizeWindow(display, handle, size.w, height);
+				}else
+					launcher.selectPrev;
 				return;
 			case XK_Return:
 			case XK_KP_Enter:
 				launcher.run(!(ev.state & ControlMask));
 				if(ev.state & ShiftMask){
 					options.lines = 15;
-					int height = options.h ? options.h : barHeight*(options.lines+1)+0.8.em-1;
-					XResizeWindow(dc.dpy, windowHandle, size.w, height);
-				}else
-					close;
+					int height = options.h ? options.h : 1.em*(options.lines+1)+0.8.em-1;
+					XResizeWindow(display, handle, size.w, height);
+				}else if(!(ev.state & ControlMask))
+					destroy;
 				return;
 			default:
 				break;
@@ -306,15 +174,17 @@ class XClient {
 		if(dc.textWidth(buf[0..length].to!string) > 0){
 			string s = buf[0..length].to!string;
 			launcher.insert(s);
-			//if(s == " ")
-			//	launcher.next;
-			draw;
 		}
+		draw;
+	}
+
+	override void onPaste(string text){
+		launcher.insert(text);
 	}
 
 	void grabKeyboard(){
 		foreach(i; 0..100){
-			if(XGrabKeyboard(dc.dpy, DefaultRootWindow(dc.dpy), true, GrabModeAsync, GrabModeAsync, CurrentTime) == GrabSuccess)
+			if(XGrabKeyboard(display, DefaultRootWindow(display), true, GrabModeAsync, GrabModeAsync, CurrentTime) == GrabSuccess)
 				return;
 			Thread.sleep(dur!"msecs"(10));
 		}

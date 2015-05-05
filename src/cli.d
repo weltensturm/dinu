@@ -1,10 +1,5 @@
 module cli;
 
-import
-	std.stdio,
-	std.string,
-	std.conv;
-
 
 mixin template cli(T){
 

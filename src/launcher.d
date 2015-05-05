@@ -38,6 +38,7 @@ class Launcher {
 	Picker[] params;
 	Picker currentParam;
 	int logIdx=1;
+	bool emptyHidden;
 
 	alias currentParam this;
 
@@ -46,7 +47,7 @@ class Launcher {
 		choiceFilter = new ChoiceFilter((c){
 			if(choiceFilter && choiceFilter.commandHistory){
 				return c.type == Type.history;
-			}else if(launcher && launcher.text.length){
+			}else if(launcher && (launcher.text.length || !launcher.emptyHidden)){
 				auto filter = [Type.file, Type.directory];
 				if(launcher && !launcher.params.length)
 					filter ~= [Type.script, Type.desktop, Type.special];
@@ -59,6 +60,15 @@ class Launcher {
 			return c.type == Type.output || c.type == Type.history;
 		});
 
+		task(&loadOutput, delegate(Command c){
+			synchronized(choiceFilter)
+				choiceFilter.output ~= c;
+			synchronized(output)
+				output.output ~= c;
+			choiceFilter.tryMatch(c);
+			output.tryMatch(c);
+		}).executeInNewThread;
+
 		reset;
 	}
 
@@ -66,6 +76,7 @@ class Launcher {
 		params = [];
 		command = new CommandPicker;
 		currentParam = command;
+		emptyHidden = true;
 		choiceFilter.commandHistory = false;
 		choiceFilter.reset("", mode);
 	}
@@ -161,40 +172,52 @@ class Picker {
 		return text;
 	}
 
-	protected void setSelected(long selected){
+	protected void setSelected(long selected, bool nice=false){
 		auto res = choiceFilter.res;
 		auto output = output.res;
-		if(selected >= cast(long)res.length || selected < -1-cast(long)output.length)
-			selected = -1;
-		if(selected > -1){
-			if(!filterText.length)
+		selected = selected.min(cast(long)res.length-1).max(-1-cast(long)output.length);
+		if(selected != -1){
+			if(this.selected == -1)
 				filterText = text;
-			text = res[cast(size_t)selected].data.text;
-		}else if(selected < -1){
-			if(!filterText.length)
-				filterText = text;
-			text = output[cast(size_t)(-selected-2)].data.text;
-		}else if(filterText.length){
+			if(selected > -1)
+				text = res[cast(size_t)selected].data.text;
+			else
+				text = output[cast(size_t)(-selected-2)].data.text;
+		}else if(this.selected != -1 && !nice){
 			text = filterText;
 			filterText = "";
 		}
+		cursor = text.length;
 		this.selected = selected;
+	}
+
+	void moveLeft(bool word){
+		if(!word)
+			cursor = max(0, cursor-1);
+	}
+
+	void moveRight(bool word){
+		if(!word)
+			cursor = min(cursor+1, text.length);
 	}
 
 	void selectNext(){
 		setSelected(selected+1);
 		cursor = text.length;
+		if(launcher.emptyHidden && !launcher.text.length){
+			launcher.emptyHidden = false;
+			choiceFilter.reset;
+		}
 	}
 
 	void selectPrev(){
-		writeln(selected-1);
 		setSelected(selected-1);
 		cursor = text.length;
 	}
 
 	void update(){
 		filterText = "";
-		setSelected(-1);
+		setSelected(-1, true);
 	}
 
 	void finishPart(){
@@ -266,6 +289,18 @@ class CommandPicker: Picker {
 		setSelected(-1);
 	}
 
+	protected override void setSelected(long s, bool n=false){
+		super.setSelected(s, n);
+		if(selected < -1){
+			auto p = new Picker;
+			p.text = output.res[-selected-2].data.parameter;
+			if(!p.text.length)
+				return;
+			launcher.text ~= ' ' ~ p.text;
+			writeln(p.text);
+		}
+	}
+
 	override void onDel(){
 		super.onDel;
 		if(!text.length)
@@ -275,14 +310,21 @@ class CommandPicker: Picker {
 	override protected void finishPart(){
 		if(!text.length && selected<0)
 			return;
-		choiceFilter.wait;
-		if(!choiceFilter.res.length){
-			command = new CommandExec(text);
-		}else{
-			selected = (selected<0 ? 0 : selected);
-			command = choiceFilter.res[cast(size_t)selected].data;
+		if(selected >= -1){
+			if(choiceFilter.res.length){
+				selected = (selected<0 ? (selected<-1 ? -selected+2 : 0) : selected);
+				command = choiceFilter.res[cast(size_t)selected].data;
+			}
+		}else if(selected < -1){
+			if(output.res.length){
+				selected = -selected-2;
+				command = output.res[cast(size_t)selected].data;
+			}
 		}
+		if(!command)
+			command = new CommandExec(text);
 		text = command.text ~ ' ';
+		task(&loadParams, text, &choiceFilter.addTemporary).executeInNewThread;
 		cursor = text.length;
 		launcher.next;
 	}
@@ -323,11 +365,6 @@ class ChoiceFilter {
 	bool commandHistory;
 
 	this(bool delegate(Command) filterFunc){
-		task(&loadOutput, (Command c){
-			synchronized(this)
-				output ~= c;
-			tryMatch(c);
-		}).executeInNewThread;
 		this.filterFunc = filterFunc;
 		startOver;
 	}
