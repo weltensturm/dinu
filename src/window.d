@@ -128,12 +128,18 @@ class Window {
 			return;
 		XMapWindow(display, handle);
 		active = true;
+		draw;
 	}
 
 	void destroy(){
+		if(!handle)
+			return;
+		hide;
+		handleEvents;
 		dc.destroy;
 		XDestroyWindow(display, handle);
 		XUngrabKeyboard(display, CurrentTime);
+		handle = 0;
 	}
 
 	void resize(int[2] size){

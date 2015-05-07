@@ -22,14 +22,15 @@ import
 	dinu.dinu,
 	dinu.xclient,
 	dinu.content,
+	dinu.filter,
 	dinu.command;
 
 
 __gshared:
 
 
-ChoiceFilter choiceFilter;
-ChoiceFilter output;
+FuzzyFilter!Command choiceFilter;
+FuzzyFilter!Command output;
 
 
 class Launcher {
@@ -38,59 +39,92 @@ class Launcher {
 	Picker[] params;
 	Picker currentParam;
 	int logIdx=1;
-	bool emptyHidden;
+	bool commandHistory;
+	string[] scannedDirs;
+	string[] scannedDirsTemp;
+	string[] bashCompletions;
 
 	alias currentParam this;
 
 	this(){
 
-		choiceFilter = new ChoiceFilter((c){
-			if(choiceFilter && choiceFilter.commandHistory){
+		choiceFilter = new FuzzyFilter!Command((c){
+			if(choiceFilter && commandHistory){
 				return c.type == Type.history;
-			}else if(launcher && (launcher.text.length || !launcher.emptyHidden)){
+			}else if(!bashCompletions.length && toString.length){
 				auto filter = [Type.file, Type.directory];
 				if(launcher && !launcher.params.length)
 					filter ~= [Type.script, Type.desktop, Type.special];
 				return filter.canFind(c.type);
-			}
-			return false;
+			}else if(bashCompletions.length){
+				return c.type == Type.bashCompletion;
+			}else
+				return false;
 		});
 
-		output = new ChoiceFilter((c){
+		output = new FuzzyFilter!Command((c){
 			return c.type == Type.output || c.type == Type.history;
 		});
 
 		task(&loadOutput, delegate(Command c){
-			synchronized(choiceFilter)
-				choiceFilter.output ~= c;
-			synchronized(output)
-				output.output ~= c;
-			choiceFilter.tryMatch(c);
-			output.tryMatch(c);
+			choiceFilter.addChoice(c);
+			output.addChoice(c);
 		}).executeInNewThread;
 
 		reset;
+		filterStart;
 	}
 
-	void reset(Type mode = Type.none){
+	void filterStart(){
+
+		scannedDirs = [];
+		scannedDirsTemp = [];
+
+		auto taskExes = task(&loadExecutables, &choiceFilter.addChoice);
+		scannedDirs ~= getcwd;
+		auto taskFiles = task(
+			&loadFiles,
+			getcwd,
+			(Command p){
+				if(p.type == Type.directory){
+					if((scannedDirs~scannedDirsTemp).canFind(p.text))
+						return;
+					else
+						scannedDirsTemp ~= p.text;
+				}
+				choiceFilter.addChoice(p);
+			},
+			&dirLoaded,
+			2
+		);
+		taskExes.executeInNewThread;
+		taskFiles.executeInNewThread;
+		choiceFilter.start({
+			while(!taskExes.done || !taskFiles.done)
+				Thread.sleep(10.msecs);
+		});
+	}
+
+	void reset(){
 		params = [];
 		command = new CommandPicker;
 		currentParam = command;
-		emptyHidden = true;
-		choiceFilter.commandHistory = false;
-		choiceFilter.reset("", mode);
+		commandHistory = false;
+		bashCompletions = [];
+		choiceFilter.reset("");
 	}
 
 	void toggleCommandHistory(){
-		choiceFilter.commandHistory = true;
+		commandHistory = true;
 		choiceFilter.reset;
 	}
 
 	void next(){
 		params ~= new Picker;
-		choiceFilter.commandHistory = false;
+		commandHistory = false;
 		choiceFilter.reset;
 		currentParam = params[$-1];
+		currentParam.update;
 	}
 
 	string finishedPart(){
@@ -101,7 +135,7 @@ class Launcher {
 
 	void clearOutput(){
 		std.file.write(options.configPath ~ ".log", "");
-		output.output = [];
+		// TODO: clear data in filter
 	}
 
 	void run(bool res=true){
@@ -113,8 +147,9 @@ class Launcher {
 		}
 		if(command.command){
 			command.command.run(reduce!"a ~ b.text"("", params));
-			if(res)
-				choiceFilter.startOver;
+			if(res){
+				filterStart;
+			}
 		}
 		if(res)
 			reset;
@@ -153,6 +188,16 @@ class Launcher {
 	override string toString(){
 		return reduce!"a ~ b.text"(command.text, params);
 	}
+
+	protected:
+
+		bool dirLoaded(string s){
+			if((scannedDirs~scannedDirsTemp).canFind(s))
+				return true;
+			scannedDirs ~= s;
+			return false;
+		}
+
 
 }
 
@@ -193,7 +238,7 @@ class Picker {
 
 	void moveLeft(bool word){
 		if(!word)
-			cursor = max(0, cursor-1);
+			cursor = max(0, cast(long)cursor-1);
 	}
 
 	void moveRight(bool word){
@@ -202,10 +247,11 @@ class Picker {
 	}
 
 	void selectNext(){
+		auto old = selected;
 		setSelected(selected+1);
 		cursor = text.length;
-		if(launcher.emptyHidden && !launcher.text.length){
-			launcher.emptyHidden = false;
+		if(old == -1 && !launcher.commandHistory && !launcher.text.length){
+			launcher.commandHistory = true;
 			choiceFilter.reset;
 		}
 	}
@@ -218,6 +264,23 @@ class Picker {
 	void update(){
 		filterText = "";
 		setSelected(-1, true);
+
+		if(launcher.toString.length && launcher.toString[$-1] == ' '){
+			//choiceFilter.remove(a => a.type == Type.bashCompletion);
+			launcher.bashCompletions = [];
+			task(&loadParams, launcher.toString, delegate(Command c){
+					//choiceFilter.addChoice(c);
+					launcher.bashCompletions ~= c.text;
+					//choiceFilter.reset;
+			}).executeInNewThread;
+		}
+
+		/+
+		auto dir = text.expandTilde.buildNormalizedPath.unixClean;
+		if(dir.exists && dir.isDir && !launcher.scannedDirs.canFind(dir)){
+			task(&loadFiles, dir, &choiceFilter.addChoice, &launcher.dirLoaded, 0).executeInNewThread;
+		}
+		+/
 	}
 
 	void finishPart(){
@@ -227,7 +290,7 @@ class Picker {
 	void onDel(){
 		update;
 		if(!text.length)
-			choiceFilter.commandHistory = false;
+			launcher.commandHistory = false;
 		choiceFilter.reset(text);
 	}
 
@@ -324,257 +387,10 @@ class CommandPicker: Picker {
 		if(!command)
 			command = new CommandExec(text);
 		text = command.text ~ ' ';
-		task(&loadParams, text, &choiceFilter.addTemporary).executeInNewThread;
+		writeln('"', text, '"');
 		cursor = text.length;
 		launcher.next;
 	}
 
-}
-
-
-class ChoiceFilter {
-
-	protected {
-
-		Command[] output;
-		Command[] permanent;
-		Command[] temporary;
-		Match[] matches;
-		string filter;
-		string narrowQueue;
-		void delegate() waitLoad;
-
-		struct Match {
-			long score;
-			Command data;
-		}
-
-		long filterStart;
-
-		Thread filterThread;
-		bool restart;
-		bool idle = true;
-
-		string[] scannedDirs;
-		string[] scannedDirsTemp;
-
-		bool delegate(Command) filterFunc;
-
-	}
-
-	bool commandHistory;
-
-	this(bool delegate(Command) filterFunc){
-		this.filterFunc = filterFunc;
-		startOver;
-	}
-
-	void startOver(){
-
-		if(waitLoad)
-			waitLoad();
-
-		permanent = [];
-		temporary = [];
-		scannedDirs = [];
-
-		auto taskExes = task(&loadExecutables, &addTemporary);
-		scannedDirs ~= getcwd;
-		auto taskFiles = task(&loadFiles, getcwd, &addTemporary, &dirLoaded, 2);
-		taskExes.executeInNewThread;
-		taskFiles.executeInNewThread;
-		waitLoad = {
-			while(!taskExes.done || !taskFiles.done)
-				Thread.sleep(10.msecs);
-		};
-		filterThread = new Thread(&filterLoop);
-		filterThread.start;
-		
-		reset;
-	}
-
-	void wait(){
-	}
-
-	void reset(string filter="", Type mode=Type.none){
-		filter = filter.expandTilde;
-		scannedDirsTemp = [];
-		restart = true;
-		synchronized(this){
-			narrowQueue = "";
-			this.filter = filter;
-		}
-	}
-
-	void narrow(string text){
-		synchronized(this)
-			narrowQueue ~= text;
-	}
-
-	Match[] res(){
-		return matches;
-	}
-
-	void run(int selected, string args){
-		matches[selected].data.run(args);
-	}
-
-	protected {
-
-		void intReset(string filter){
-			if(!idle)
-				throw new Exception("already working");
-			idle = false;
-			this.filter = filter;
-			synchronized(this)
-				matches = [];
-			filterStart = Clock.currSystemTick.seconds;
-			Command[] cpy;
-			synchronized(this)
-				cpy = permanent ~ temporary ~ output;
-			foreach(m; cpy)
-				tryMatch(m);
-			idle = true;
-		}
-
-		void intNarrow(string filter){
-			if(!idle)
-				throw new Exception("already working");
-			idle = false;
-			synchronized(this)
-				this.filter = filter;
-			Match[] mdup;
-			synchronized(this){
-				mdup = matches;
-				matches = [];
-			}
-			filterStart = Clock.currSystemTick.seconds;
-			foreach(m; mdup){
-				tryMatch(m.data);
-				if(restart)
-					break;
-			}
-			idle = true;
-		}
-
-		void addPermanent(Command p){
-			synchronized(this)
-				permanent ~= p;
-			tryMatch(p);
-		}
-
-		void addTemporary(Command p){
-			synchronized(this){
-				if(p.type == Type.directory){
-					if((scannedDirs~scannedDirsTemp).canFind(p.text))
-						return;
-					else
-						scannedDirsTemp ~= p.text;
-				}
-				temporary ~= p;
-			}
-			tryMatch(p);
-		}
-
-		void tryMatch(Command p){
-			if(!filterFunc(p))
-				return;
-			Match match;
-			match.score = p.filterText.cmpFuzzy(filter);
-			if(match.score > 0){
-				match.score += p.score;
-				match.data = p;
-				synchronized(this){
-					foreach(i, e; matches){
-						if(e.score < match.score){
-							matches = matches[0..i] ~ match ~ matches[i..$];
-							return;
-						}
-					}
-					matches = matches ~ match;
-				}
-			}
-		}
-
-		void filterLoop(){
-			filterThread.isDaemon = true;
-			try{
-				while(true){
-					if(narrowQueue.length){
-						synchronized(this){
-							filter ~= narrowQueue;
-							narrowQueue = "";
-						}
-						intNarrow(filter);
-					}else if(restart){
-						intReset(filter);
-						restart = false;
-					}else{
-						auto dir = filter.expandTilde.buildNormalizedPath.unixClean;
-						if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
-							task(&loadFiles, dir, &addTemporary, &dirLoaded, 0).executeInNewThread;
-						}
-						Thread.sleep(15.msecs);
-					}
-				}
-			}catch(Throwable t)
-				writeln(t);
-		}
-	
-		bool dirLoaded(string s){
-			if((scannedDirs~scannedDirsTemp).canFind(s))
-				return true;
-			scannedDirs ~= s;
-			return false;
-		}
-
-	}
-
-}
-
-
-long cmpFuzzy(string str, string sub){
-	long scoreMul = 100;
-	long score = scoreMul*10;
-	size_t curIdx;
-	long largestScore;
-	foreach(i, c; str){
-		if(curIdx<sub.length && c.toLower == sub[curIdx].toLower){
-			scoreMul *= (c == sub[curIdx] ? 4 : 3);
-			score += scoreMul;
-			curIdx++;
-		}else{
-			scoreMul = 100;
-		}
-		if(curIdx==sub.length){
-			scoreMul = 100;
-			curIdx = 0;
-			score = scoreMul*10;
-			if(largestScore < score-i+sub.length)
-				largestScore = score-i+sub.length;
-		}
-	}
-	if(!largestScore)
-		return 0;
-	if(!sub.startsWith(".") && (str.canFind("/.") || str.startsWith(".")))
-		largestScore -= 5;
-	if(sub == str)
-		largestScore += 10000000;
-	return largestScore;
-}
-
-
-long phoneticalScore(string str){
-	long score = 0;
-	foreach(i, c; str){
-		score += cast(long)c / (i*5 + 1);
-	}
-	return score;
-}
-
-
-unittest {
-	assert("asbsdf".cmpFuzzy("asdf") > "absdf".cmpFuzzy("asdf"));
-	assert("dlist-edgeflag-dangling".cmpFuzzy("pidgin") == 0);
 }
 

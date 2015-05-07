@@ -35,6 +35,22 @@ struct Font {
 	XftFont *xft_font;
 }
 
+string tabsToSpaces(string text, int spaces=4){
+	string result;
+	int i = 0;
+	foreach(c; text){
+		if(c == '\t'){
+			foreach(si; 0..spaces-(i%spaces))
+				result ~= ' ';
+			i += 4;
+		}else{
+			result ~= c;
+			i += 1;
+		}
+	}
+	return result;
+}
+
 
 class DrawingContext {
 
@@ -48,21 +64,14 @@ class DrawingContext {
 	FontColor[string] fontColors;
 
 	this(){
-		//if(!setlocale(LC_CTYPE, "") || !XSupportsLocale())
-		//	fputs("no locale support", stderr);
 		dpy = XOpenDisplay(null);
 		if(!dpy)
 			throw new Exception("cannot open display");
-
 		gc = XCreateGC(dpy, DefaultRootWindow(dpy), 0, null);
 		XSetLineAttributes(dpy, gc, 1, LineSolid, CapButt, JoinMiter);
 	}
 
 	void destroy(){
-		//freecol(colorNormal);
-		//freecol(colorSelected);
-		//freecol(colorDim);
-
 		if(font.xft_font){
 			XftFontClose(dpy, font.xft_font);
 			XftDrawDestroy(xftdraw);
@@ -104,6 +113,7 @@ class DrawingContext {
 	}
 
 	int text(int[2] pos, string text, string col, double offset=0){
+		text = text.tabsToSpaces;
 		auto color = this.fontColor(col);
 		int textWidth = textWidth(text);
 		int offsetRight = max(0.0,-offset).em;
@@ -204,6 +214,7 @@ class DrawingContext {
 	}
 
 	int textWidth(string c){
+		c = c.tabsToSpaces;
 		if(font.xft_font){
 			XGlyphInfo gi;
 			XftTextExtentsUtf8(dpy, font.xft_font, cast(char*)c, cast(int)c.length, &gi);

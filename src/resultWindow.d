@@ -4,28 +4,29 @@ import
 	std.math,
 	std.algorithm,
 	dinu.dinu,
-	dinu.xapp,
 	dinu.window,
 	dinu.xclient,
 	dinu.launcher,
+	dinu.command,
+	dinu.filter,
 	draw;
 
 
 
 class ResultWindow: Window {
 
-	//Arguments options;
-	int offset;
-	ChoiceFilter.Match[] matches;
+	FuzzyFilter!(Command).Match[] matches;
 
 	this(){
 		super(options.screen, [500,500], [500,500]);
-		//this.options = options;
-		offset = pos[0];
 		dc.initfont(options.font);
 	}
 
 	void update(XClient windowMain){
+		if(!runProgram){
+			destroy;
+			return;
+		}
 		matches = choiceFilter.res;
 		if(!matches.length && active)
 			hide;
@@ -33,10 +34,12 @@ class ResultWindow: Window {
 			show;
 		if(!active)
 			return;
-		if(min(15, matches.length)*1.em != size.h)
-			resize([size.w, 1.4.em*min(15, matches.length)+0.3.em]);
-		if(pos[0] != offset+dc.textWidth(launcher.finishedPart)-0.2.em || pos[1] != windowMain.size.y)
-			move([windowMain.size.w/4+dc.textWidth(launcher.finishedPart)-0.2.em, windowMain.size.y]);
+		auto targetHeight = min(15, matches.length)*1.4.em+0.3.em;
+		if(targetHeight != size.h)
+			resize([size.w, targetHeight]);
+		auto targetX = windowMain.size.w/4+dc.textWidth(launcher.finishedPart)-0.2.em;
+		if(pos != [targetX, windowMain.size.y])
+			move([targetX, windowMain.size.y]);
 	}
 
 	override void draw(){

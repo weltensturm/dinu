@@ -40,16 +40,18 @@ alias h = y;
 private double em1;
 
 int em(double mod){
-	return cast(int)(round(em1*1.3*mod));
+	return cast(int)(round(em1*mod));
 }
 
 
 class XClient: dinu.window.Window {
 
+	dinu.window.Window resultWindow;
+
 	this(){
 		super(options.screen, [options.x, options.y], [1,1]);
 		dc.initfont(options.font);
-		em1 = dc.font.height;
+		em1 = dc.font.height*1.3;
 		resize([
 			options.w ? options.w : DisplayWidth(display, screen),
 			options.h ? options.h : 1.em*(options.lines+1)+0.8.em
@@ -131,7 +133,7 @@ class XClient: dinu.window.Window {
 			}
 		switch(key){
 			case XK_Escape:
-				destroy;
+				close();
 				return;
 			case XK_Delete:
 				launcher.delChar;
@@ -161,12 +163,13 @@ class XClient: dinu.window.Window {
 			case XK_Return:
 			case XK_KP_Enter:
 				launcher.run(!(ev.state & ControlMask));
-				if(ev.state & ShiftMask){
+				if(ev.state & ShiftMask && !options.lines){
 					options.lines = 15;
 					int height = options.h ? options.h : 1.em*(options.lines+1)+0.8.em-1;
 					XResizeWindow(display, handle, size.w, height);
-				}else if(!(ev.state & ControlMask))
-					destroy;
+				}
+				if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
+					close();
 				return;
 			default:
 				break;
@@ -188,6 +191,7 @@ class XClient: dinu.window.Window {
 				return;
 			Thread.sleep(dur!"msecs"(10));
 		}
+		close();
 		assert(0, "cannot grab keyboard");
 	}
 

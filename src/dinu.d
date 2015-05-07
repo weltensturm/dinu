@@ -26,6 +26,7 @@ Launcher launcher;
 
 bool runProgram = true;
 
+void delegate() close;
 
 
 struct Options {
@@ -81,18 +82,23 @@ void windowLoop(){
 	auto windowResults = new ResultWindow;
 	windowResults.draw;
 
-	scope(exit){
+	windowMain.resultWindow = windowResults;
+
+	close = {
 		windowMain.destroy;
 		windowResults.destroy;
 		runProgram = false;
-	}
+	};
+
+	scope(exit)
+		close();
 
 	long last = Clock.currSystemTick.msecs;
-	while(windowMain.active || windowResults.active){
+	while(runProgram && windowMain.active){
 		windowMain.handleEvents;
 		windowMain.draw;
-		windowResults.update(windowMain);
 		windowResults.handleEvents;
+		windowResults.update(windowMain);
 		windowResults.draw;
 		auto curr = Clock.currSystemTick.msecs;
 		last = curr;
