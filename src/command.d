@@ -27,14 +27,15 @@ __gshared:
 
 enum Type {
 
-	none =         0,
-	script =    1<<0,
-	desktop =   1<<1,
-	history =   1<<2,
-	file =      1<<3,
-	directory = 1<<4,
-	output =    1<<5,
-	special =   1<<6
+	none =      		   0,
+	script =    		1<<0,
+	desktop =   		1<<1,
+	history =   		1<<2,
+	file =      		1<<3,
+	directory = 		1<<4,
+	output =    		1<<5,
+	special =   		1<<6,
+	bashCompletion =	1<<7
 
 }
 
@@ -122,6 +123,15 @@ class CommandFile: Command {
 
 	override void run(string params){
 		this.spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
+	}
+
+}
+
+class CommandBashCompletion: CommandFile {
+
+	this(string name){
+		super(name);
+		type = Type.bashCompletion;
 	}
 
 }

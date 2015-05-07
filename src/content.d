@@ -172,7 +172,7 @@ void loadParams(string command, void delegate(Command) addChoice){
 	try{
 		auto p = pipeShell("~/complete.sh '%s'".format(command), Redirect.stdout);
 		foreach(line; p.stdout.byLine){
-			addChoice(new CommandFile(line.to!string));
+			addChoice(new CommandBashCompletion(line.to!string));
 		}
 	}catch(Throwable e){
 		writeln(e);
