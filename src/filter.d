@@ -79,6 +79,13 @@ class FuzzyFilter(T) {
 		tryMatch(p);
 	}
 
+	void setChoices(T[] choices){
+		synchronized(this){
+			this.choices = choices;
+			reset;
+		}
+	}
+
 	protected {
 
 		void intReset(string filter){
@@ -129,6 +136,8 @@ class FuzzyFilter(T) {
 				match.data = p;
 				synchronized(this){
 					foreach(i, e; matches){
+						if(restart)
+							break;
 						if(e.score <= match.score){
 							if(e.score == match.score && e.data.filterText.icmp(match.data.filterText) < 0)
 								continue;
@@ -155,7 +164,7 @@ class FuzzyFilter(T) {
 						restart = false;
 						intReset(filter);
 					}else{
-						Thread.sleep(15.msecs);
+						Thread.sleep(5.msecs);
 					}
 				}
 			}catch(Throwable t)

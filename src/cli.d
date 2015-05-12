@@ -1,31 +1,40 @@
 module cli;
 
 
-mixin template cli(T){
+import
+	std.conv,
+	std.stdio,
+	std.string;
 
-	this(string[] args){
+
+
+void fill(T)(ref T object, string[] args){
+	try{
+		writeln(args);
 		foreach(member; __traits(allMembers, T)) {
-			foreach(attr; __traits(getAttributes, mixin(member))){
+			foreach(attr; __traits(getAttributes, mixin("object."~member))){
 				foreach(i, arg; args){
 					if(arg[0] == '-' && arg == attr){
-						static if(is(typeof(mixin(member)) == bool)){
-							mixin(member ~ " = !" ~ member ~ ";");
+						static if(is(typeof(mixin("object."~member)) == bool)){
+							mixin("object." ~ member ~ " = !object." ~ member ~ ";");
 							continue;
 						}else{
-							mixin(member ~ " = to!(typeof(" ~ member ~ "))(args[i+1]);");
+							mixin("object." ~ member ~ " = to!(typeof(T." ~ member ~ "))(args[i+1]);");
 							continue;
 						}
 					}
 				}
 			}
 		}
+	}catch(Throwable t){
+		usage(object);
+		throw t;
 	}
+}
 
-	void usage(){
-		writeln("options: ");
-		foreach(member; __traits(allMembers, T))
-			foreach(attr; __traits(getAttributes, mixin(member)))
-				writeln("\t[%s (%s %s)]".format(attr, mixin("typeof(" ~ member ~ ").stringof"), member));
-	}
-
+void usage(T)(T object){
+	writeln("options: ");
+	foreach(member; __traits(allMembers, T))
+		foreach(attr; __traits(getAttributes, mixin("object."~member)))
+			writeln("\t%s: %s %s".format(attr, mixin("typeof(object." ~ member ~ ").stringof"), member));
 }

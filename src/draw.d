@@ -9,6 +9,7 @@ import
 	x11.Xlib,
 	x11.Xutil,
 	x11.keysymdef,
+	dinu.util,
 	dinu.xclient;
 
 
@@ -119,7 +120,7 @@ class DrawingContext {
 		int offsetRight = max(0.0,-offset).em;
 		int offsetLeft = max(0.0,offset-1).em;
 		int x = pos[0] - cast(int)(min(1,max(0,offset))*textWidth) + offsetRight - offsetLeft;
-		int y = pos[1];
+		int y = pos[1] + font.height-1;
 		XSetForeground(dpy, gc, color.id);
 		if(font.xft_font){
 			if(!xftdraw)
@@ -140,7 +141,7 @@ class DrawingContext {
 		Colormap cmap = DefaultColormap(dpy, DefaultScreen(dpy));
 		XColor c;
 		if(!XAllocNamedColor(dpy, cmap, cast(char*)colstr, &c, &c))
-			throw new Exception("cannot allocate color '%s'", colstr);
+			throw new Exception("cannot allocate color '%s'".format(colstr));
 		return c.pixel;
 	}
 
@@ -153,7 +154,7 @@ class DrawingContext {
 			if(!XftColorAllocName(dpy, DefaultVisual(dpy, DefaultScreen(dpy)),
 				DefaultColormap(dpy, DefaultScreen(dpy)), cast(char*)name, &col.id_xft)
 				)
-				throw new Exception("error, cannot allocate xft font color '%s'", name);
+				throw new Exception("error, cannot allocate xft font color '%s'".format(name));
 		return col;
 	}
 
@@ -184,14 +185,12 @@ class DrawingContext {
 				font.descent = max(font.descent, xfonts[i].descent);
 				font.width   = max(font.width,   cast(int)xfonts[i].max_bounds.width);
 			}
-			writeln("loaded X font " ~ fontstr);
 		}else if(font.xft_font){
 			font.ascent = font.xft_font.ascent;
 			font.descent = font.xft_font.descent;
 			font.width = font.xft_font.max_advance_width;
-			writeln("loaded Xft font " ~ fontstr);
 		}else
-			throw new Exception("cannot load font '%s'", fontstr);
+			throw new Exception("cannot load font '%s'".format(fontstr));
 		if(missing)
 			XFreeStringList(missing);
 		font.height = font.ascent + font.descent;

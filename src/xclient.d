@@ -13,8 +13,9 @@ import
 	core.thread,
 	draw,
 	cli,
+	dinu.util,
 	dinu.window,
-	dinu.launcher,
+	dinu.commandBuilder,
 	dinu.command,
 	dinu.dinu,
 	desktop,
@@ -24,17 +25,6 @@ import
 
 __gshared:
 
-
-
-ref T x(T)(ref T[2] a){
-	return a[0];
-}
-alias w = x;
-
-ref T y(T)(ref T[2] a){
-	return a[1];
-}
-alias h = y;
 
 
 private double em1;
@@ -47,6 +37,7 @@ int em(double mod){
 class XClient: dinu.window.Window {
 
 	dinu.window.Window resultWindow;
+	int padding;
 
 	this(){
 		super(options.screen, [options.x, options.y], [1,1]);
@@ -54,10 +45,11 @@ class XClient: dinu.window.Window {
 		em1 = dc.font.height*1.3;
 		resize([
 			options.w ? options.w : DisplayWidth(display, screen),
-			options.h ? options.h : 1.em*(options.lines+1)+0.8.em
+			1.em*(options.lines+1)+0.8.em
 		]);
 		show;
 		grabKeyboard;
+		padding = 0.4.em;
 	}
 
 	override void draw(){
@@ -66,38 +58,47 @@ class XClient: dinu.window.Window {
 		assert(thread_isMainThread);
 		dc.rect([0,0], [size.w, size.h], options.colorBg);
 		int separator = size.w/4;
-		drawInput([0, options.lines*1.em+0.2.em], [size.w, 1.4.em], separator);
-		drawMatches([0, 0], [size.w, 1.em*options.lines], separator);
+		drawInput([0, options.lines*1.em], [size.w, size.h-1.em*options.lines], separator);
+		drawOutput([0, 0], [size.w, 1.em*options.lines], separator);
 		super.draw;
 	}
 
 	void drawInput(int[2] pos, int[2] size, int sep){
-		dc.rect([sep, pos.y], [size.w/2, size.h], options.colorInputBg);
+		auto paddingVert = 0.2.em;
+		dc.rect([sep, pos.y+paddingVert], [size.w/2, size.h-paddingVert*2], options.colorInputBg);
 		// cwd
-		dc.text([pos.x+sep, pos.y+dc.font.height-1+0.2.em], getcwd, options.colorHint, 1.4);
+		int textY = pos.y+size.h/2-0.5.em;
+		dc.text([pos.x+sep, textY], getcwd, options.colorHint, 1.4);
 		dc.clip([pos.x+size.w/4, pos.y], [size.w/2, size.h]);
-		int textWidth = dc.textWidth(launcher.toString[0..launcher.cursor] ~ ".");
+		int textWidth = dc.textWidth(commandBuilder.toString ~ "..");
 		int offset = -max(0, textWidth-size.w/2);
+		int textStart = offset+pos.x+sep+padding;
 		// input
-		dc.text([offset+pos.x+sep+0.2.em, pos.y+dc.font.height-1+0.2.em], launcher.toString, options.colorInput);
+		if(!commandBuilder.commandSelected){
+			dc.text([textStart, textY], commandBuilder.toString, options.colorInput);
+		}else{
+			auto xoff = textStart+commandBuilder.commandSelected.draw(dc, [textStart, textY], false);
+			foreach(param; commandBuilder.command[1..$])
+				xoff += dc.text([xoff, textY], param ~ ' ', options.colorInput);
+		}
 		// cursor
-		int cursorOffset = dc.textWidth(launcher.finishedPart);
-		int curpos = offset+pos.x+sep+cursorOffset+0.2.em + dc.textWidth(launcher.toString[0..launcher.cursor]);
-		dc.rect([curpos, pos.y+0.2.em], [1, size.y-0.4.em], options.colorInput);
+		int cursorOffset = dc.textWidth(commandBuilder.finishedPart);
+		int curpos = padding+offset+pos.x+sep+cursorOffset + dc.textWidth(commandBuilder.text[0..commandBuilder.cursor]);
+		dc.rect([curpos, pos.y+paddingVert*2], [1, size.y-paddingVert*4], options.colorInput);
 		dc.noclip;
 	}
 
-	void drawMatches(int[2] pos, int[2] size, int sep){
+	void drawOutput(int[2] pos, int[2] size, int sep){
 		dc.rect(pos, size, options.colorOutputBg);
-		auto matches = output.res;
-		auto selected = launcher.selected < -1 ? -launcher.selected-2 : -1;
+		auto matches = output.dup;
+		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
 		long start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
 		foreach(i, match; matches[start..min($, start+options.lines)]){
 			int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
 			if(start+i == selected)
 				dc.rect([pos.x+sep, y], [size.w/2, 1.em], options.colorHintBg);
 			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);
-			match.data.draw(dc, [pos.x+sep+0.1.em, y+dc.font.height-1], start+i == selected);
+			match.draw(dc, [pos.x+sep+padding, y], start+i == selected);
 			dc.noclip;
 		}
 	}
@@ -110,19 +111,20 @@ class XClient: dinu.window.Window {
 		if(ev.state & ControlMask)
 			switch(key){
 				case XK_r:
-					launcher.toggleCommandHistory;
+					commandBuilder.commandHistory = true;
+					commandBuilder.resetFilter;
 					return;
 				case XK_q:
 					key = XK_Escape;
 					break;
 				case XK_u:
-					launcher.deleteLeft;
+					commandBuilder.deleteLeft;
 					return;
 				case XK_BackSpace:
-					launcher.deleteWordLeft;
+					commandBuilder.deleteWordLeft;
 					return;
 				case XK_Delete:
-					launcher.deleteWordRight;
+					commandBuilder.deleteWordRight;
 					return;
 				case XK_V:
 				case XK_v:
@@ -136,36 +138,36 @@ class XClient: dinu.window.Window {
 				close();
 				return;
 			case XK_Delete:
-				launcher.delChar;
+				commandBuilder.delChar;
 				return;				
 			case XK_BackSpace:
-				launcher.delBackChar;
+				commandBuilder.delBackChar;
 				return;
 			case XK_Left:
-				launcher.moveLeft((ev.state & ControlMask) != 0);
+				commandBuilder.moveLeft((ev.state & ControlMask) != 0);
 				return;
 			case XK_Right:
-				launcher.moveRight((ev.state & ControlMask) != 0);
+				commandBuilder.moveRight((ev.state & ControlMask) != 0);
 				return;
 			case XK_Tab:
 			case XK_Down:
-				launcher.selectNext;
+				commandBuilder.select(commandBuilder.selected+1);
 				return;
 			case XK_ISO_Left_Tab:
 			case XK_Up:
-				if(!options.lines && launcher.selected == -1){
+				if(!options.lines && commandBuilder.selected == -1){
 					options.lines = 15;
-					int height = options.h ? options.h : 1.em*(options.lines+1)+0.8.em-1;
+					int height = 1.em*(options.lines+1)+0.8.em-1;
 					XResizeWindow(display, handle, size.w, height);
 				}else
-					launcher.selectPrev;
+					commandBuilder.select(commandBuilder.selected-1);
 				return;
 			case XK_Return:
 			case XK_KP_Enter:
-				launcher.run(!(ev.state & ControlMask));
+				commandBuilder.run(!(ev.state & ControlMask));
 				if(ev.state & ShiftMask && !options.lines){
 					options.lines = 15;
-					int height = options.h ? options.h : 1.em*(options.lines+1)+0.8.em-1;
+					int height = 1.em*(options.lines+1)+0.8.em-1;
 					XResizeWindow(display, handle, size.w, height);
 				}
 				if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
@@ -176,13 +178,13 @@ class XClient: dinu.window.Window {
 		}
 		if(dc.textWidth(buf[0..length].to!string) > 0){
 			string s = buf[0..length].to!string;
-			launcher.insert(s);
+			commandBuilder.insert(s);
 		}
 		draw;
 	}
 
 	override void onPaste(string text){
-		launcher.insert(text);
+		commandBuilder.insert(text);
 	}
 
 	void grabKeyboard(){
