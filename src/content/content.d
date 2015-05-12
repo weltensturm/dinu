@@ -26,33 +26,6 @@ import
 __gshared:
 
 
-/+
-void loadFiles(string dir, void delegate(Command) addChoice, bool delegate(string) dirCompleted, int depth=0){
-	dir = dir.chompPrefix(getcwd ~ '/').chomp("/") ~ "/";
-	Command[] content;
-	if(dirCompleted(dir))
-		return;
-	foreach(i, entry; dir.expandTilde.dirContent){
-		string path = buildNormalizedPath(entry).chompPrefix(getcwd ~ '/').unixClean;
-		try{
-			if(entry.isDir){
-				if(depth){
-					loadFiles(entry, addChoice, dirCompleted, depth-1);
-				}
-				addChoice(new CommandDir(path.unixEscape));
-			}else{
-				auto attr = getAttributes(path);
-				if(attr & (1 + (1<<3)))
-					addChoice(new CommandExec(path.unixEscape));
-				addChoice(new CommandFile(path.unixEscape));
-			}
-		}catch(Throwable t){
-			writeln(t);
-		}
-	}
-}
-+/
-
 string[] loadParams(string command){
 	bool[string] found;
 	auto p = pipeShell("./complete.sh '%s'".format(command), Redirect.stdout);
@@ -77,8 +50,6 @@ string[] dirContent(string dir){
 		}
 	}catch(Throwable e)
 		writeln("bad thing ", e);
-	//foreach(subdir; subdirs)
-	//	res ~= subdir.dirContent(depth-1);
 	return res;
 }
 

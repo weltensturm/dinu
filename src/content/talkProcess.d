@@ -44,7 +44,7 @@ class CommandTalkProcess: Command {
 	}
 
 	override void run(){
-		("/proc/" ~ pid ~ "/fd/0").append(parameter);
+		("/proc/" ~ pid ~ "/fd/0").write(parameter ~ '\n');
 	}
 
 }

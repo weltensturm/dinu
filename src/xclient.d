@@ -68,7 +68,7 @@ class XClient: dinu.window.Window {
 		dc.rect([sep, pos.y+paddingVert], [size.w/2, size.h-paddingVert*2], options.colorInputBg);
 		// cwd
 		int textY = pos.y+size.h/2-0.5.em;
-		dc.text([pos.x+sep, textY], getcwd, options.colorHint, 1.4);
+		dc.text([pos.x+sep, textY], getcwd, commandBuilder.commandHistory ? options.colorExec : options.colorHint, 1.4);
 		dc.clip([pos.x+size.w/4, pos.y], [size.w/2, size.h]);
 		int textWidth = dc.textWidth(commandBuilder.toString ~ "..");
 		int offset = -max(0, textWidth-size.w/2);

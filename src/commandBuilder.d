@@ -1,27 +1,13 @@
 module dinu.commandBuilder;
 
 import
-	std.array,
-	std.stdio,
-	std.range,
-	std.string,
 	std.conv,
-	std.utf,
 	std.uni,
 	std.algorithm,
-	std.parallelism,
-	std.process,
 	std.file,
 	std.path,
-	std.math,
-	std.datetime,
-	core.thread,
-	core.sync.condition,
-	draw,
-	cli,
 	dinu.dinu,
 	dinu.util,
-	dinu.xclient,
 	dinu.content.content,
 	dinu.content.output,
 	dinu.content.executables,
@@ -80,7 +66,6 @@ class CommandBuilder {
 	string filterText;
 
 	Command commandSelected;
-	//Picker paramPicker;
 	int logIdx=1;
 	bool commandHistory;
 	string[] scannedDirs;
@@ -91,6 +76,8 @@ class CommandBuilder {
 	ExecutablesLoader execLoader;
 	TalkProcessLoader processLoader;
 	FilesLoader filesLoader;
+
+	Command[] history;
 
 	this(){
 
@@ -112,7 +99,11 @@ class CommandBuilder {
 
 		outputLoader = new OutputLoader;
 		outputLoader.each((c){
-			choiceFilter.addChoice(c);
+			if(c.type == Type.history){
+				synchronized(this)
+					history = c ~ history;
+				choiceFilter.addChoice(c);
+			}
 			synchronized(this){
 				if(c.score >= 10000*999)
 					output = c ~ output;
@@ -144,7 +135,7 @@ class CommandBuilder {
 	void resetChoices(){
 		bashCompletions = [];
 		synchronized(this)
-			choiceFilter.setChoices(output);
+			choiceFilter.setChoices(history);
 
 		if(execLoader)
 			execLoader.stop;
@@ -176,8 +167,8 @@ class CommandBuilder {
 		choiceFilter.reset(text);
 	}
 
-	void resetState(){
-		if(editing != 0){
+	void resetState(bool force=false){
+		if(force || editing != 0 || !text.length){
 			commandHistory = false;
 			filterText = "";
 		}
@@ -203,6 +194,7 @@ class CommandBuilder {
 	void clearOutput(){
 		std.file.write(options.configPath ~ ".log", "");
 		output = [];
+		history = [];
 	}
 
 	void run(bool r=true){
@@ -225,15 +217,17 @@ class CommandBuilder {
 		}
 	}
 
+	// Choice selection
+
 	void select(long selected){
 		auto res = choiceFilter.res;
-		selected = max(-cast(long)output.length-1, min(res.length-1, selected));
+		selected = max(-cast(long)output.length-1, min(cast(long)res.length-1, selected));
 		if(selected == -1){
 			if(filterText.length){
 				text = filterText[0..$-1];
 				cursor = text.length;
 				filterText = "";
-				if(editing == 0)
+				if(editing == 0 || commandHistory)
 					commandSelected = null;
 			}
 		}else if(selected > -1){
@@ -320,7 +314,7 @@ class CommandBuilder {
 		}else if(!word)
 			cursor = min(cursor+1, text.length);
 	}
-	
+
 	// Text altering
 
 	void insert(string s){
@@ -334,11 +328,11 @@ class CommandBuilder {
 					commandSelected = new CommandExec(command[0]);
 				text = commandSelected.text;
 			}
+			resetState(true);
 			command ~= "";
 			editing++;
 			cursor = 0;
-			choiceFilter.reset;
-			select(-1);
+			resetFilter;
 			checkNativeCompletions;
 			return;
 		}
@@ -374,7 +368,6 @@ class CommandBuilder {
 		resetState;
 		text.delChar(cursor);
 		resetFilter;
-		select(-1);
 		checkNativeCompletions;
 	}
 
@@ -387,7 +380,6 @@ class CommandBuilder {
 		}
 		text.delBackChar(cursor);
 		resetFilter;
-		select(-1);
 		checkNativeCompletions;
 	}
 
@@ -399,7 +391,6 @@ class CommandBuilder {
 		}
 		text.deleteWordLeft(cursor);
 		resetFilter;
-		select(-1);
 		checkNativeCompletions;
 	}
 
@@ -407,7 +398,6 @@ class CommandBuilder {
 		resetState;
 		text.deleteWordRight(cursor);
 		resetFilter;
-		select(-1);
 		checkNativeCompletions;
 	}
 
