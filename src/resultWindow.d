@@ -41,8 +41,8 @@ class ResultWindow: Window {
 		auto targetX = windowMain.size.w/4;
 		if(!commandBuilder.commandHistory)
 			targetX += dc.textWidth(commandBuilder.finishedPart);
-		if(pos != [targetX, windowMain.size.y+options.y])
-			move([targetX, windowMain.size.y+options.y]);
+		if(pos != [targetX, windowMain.size.y+windowMain.pos.y])
+			move([targetX, windowMain.size.y+windowMain.pos.y]);
 	}
 
 	override void draw(){

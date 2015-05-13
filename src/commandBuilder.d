@@ -6,6 +6,7 @@ import
 	std.algorithm,
 	std.file,
 	std.path,
+	std.parallelism,
 	dinu.dinu,
 	dinu.util,
 	dinu.content.content,
@@ -178,12 +179,15 @@ class CommandBuilder {
 		auto dirty = bashCompletions.length > 0;
 		bashCompletions = [];
 		if(command.length > 1){
-			foreach(c; loadParams(toString))
-				bashCompletions ~= new CommandBashCompletion(c);
-			if(bashCompletions.length)
-				choiceFilter.setChoices(bashCompletions);
-		}
-		if(dirty)
+			task({
+				foreach(c; loadParams(toString))
+					bashCompletions ~= new CommandBashCompletion(c);
+				if(bashCompletions.length){
+					choiceFilter.setChoices(bashCompletions);
+					resetFilter;
+				}
+			}).executeInNewThread;
+		}else if(dirty)
 			resetChoices;
 	}
 
@@ -221,7 +225,6 @@ class CommandBuilder {
 
 	void select(long selected){
 		auto res = choiceFilter.res;
-		selected = max(-cast(long)output.length-1, min(cast(long)res.length-1, selected));
 		if(selected == -1){
 			if(filterText.length){
 				text = filterText[0..$-1];
@@ -230,12 +233,12 @@ class CommandBuilder {
 				if(editing == 0 || commandHistory)
 					commandSelected = null;
 			}
+			this.selected = -1;
 		}else if(selected > -1){
 			selectChoice(selected);
 		}else{
 			selectOutput(-selected-2);
 		}
-		this.selected = selected;
 	}
 
 	void selectChoice(long selected){
@@ -268,10 +271,12 @@ class CommandBuilder {
 				text = sel.text;
 			}
 			cursor = text.length;
+			this.selected = selected;
 		}
 	}
 
 	void selectOutput(long selected){
+		selected = selected.max(0).min(output.length-1);
 		if(!filterText.length)
 			filterText = text ~ ' ';
 		auto c = output[cast(size_t)selected];
@@ -280,6 +285,7 @@ class CommandBuilder {
 		else
 			text = '\'' ~ c.text ~ '\'';
 		cursor = text.length;
+		this.selected = -selected-2;
 	}
 
 	// Text functions

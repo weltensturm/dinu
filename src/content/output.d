@@ -58,7 +58,6 @@ class OutputLoader: ChoiceLoader {
 			if(idx==0 || !runProgram)
 				break;
 		}
-		p.pid.wait;
 	}
 
 	void matchLine(string line, size_t idx){

@@ -97,12 +97,15 @@ void windowLoop(){
 		close();
 
 	long last = Clock.currSystemTick.msecs;
-	while(runProgram && windowMain.active){
+	while(windowMain.active){
 		windowMain.handleEvents;
 		windowMain.draw;
-		windowResults.handleEvents;
-		windowResults.update(windowMain);
-		windowResults.draw;
+		windowMain.update;
+		if(runProgram){
+			windowResults.handleEvents;
+			windowResults.update(windowMain);
+			windowResults.draw;
+		}
 		auto curr = Clock.currSystemTick.msecs;
 		last = curr;
 		Thread.sleep((15 - max(0, min(15, curr-last))).msecs);

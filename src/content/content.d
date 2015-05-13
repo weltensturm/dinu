@@ -28,7 +28,7 @@ __gshared:
 
 string[] loadParams(string command){
 	bool[string] found;
-	auto p = pipeShell("./complete.sh '%s'".format(command), Redirect.stdout);
+	auto p = pipeShell(thisExePath.dirName.dirName ~ "/complete.sh '%s'".format(command), Redirect.stdout);
 	string[] result;
 	foreach(line; p.stdout.byLine){
 		if(line !in found){

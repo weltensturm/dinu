@@ -15,6 +15,7 @@ import
 	cli,
 	dinu.util,
 	dinu.window,
+	dinu.animation,
 	dinu.commandBuilder,
 	dinu.command,
 	dinu.dinu,
@@ -34,28 +35,50 @@ int em(double mod){
 }
 
 
+
 class XClient: dinu.window.Window {
 
 	dinu.window.Window resultWindow;
 	int padding;
+	int animationY;
+	bool shouldClose;
+	long lastDraw;
+	double animStart;
+
+	Animation windowAnimation;
 
 	this(){
-		super(options.screen, [options.x, options.y], [1,1]);
+		super(options.screen, [0, 0], [1,1]);
 		dc.initfont(options.font);
 		em1 = dc.font.height*1.3;
 		resize([
 			options.w ? options.w : DisplayWidth(display, screen),
 			1.em*(options.lines+1)+0.8.em
 		]);
+		move([
+			options.x,
+			-size.h
+		]);
 		show;
 		grabKeyboard;
 		padding = 0.4.em;
+		lastDraw = Clock.currSystemTick.msecs;
+		windowAnimation = new AnimationExpIn(pos.y, 0, 0.1+size.h/4000.0);
+	}
+
+	void update(){
+		int targetY = cast(int)windowAnimation.calculate;
+		if(targetY != pos.y)
+			move([pos.x, targetY]);
+		else if(windowAnimation.done && shouldClose)
+			super.destroy;
 	}
 
 	override void draw(){
 		if(!active)
 			return;
 		assert(thread_isMainThread);
+
 		dc.rect([0,0], [size.w, size.h], options.colorBg);
 		int separator = size.w/4;
 		drawInput([0, options.lines*1.em], [size.w, size.h-1.em*options.lines], separator);
@@ -88,6 +111,14 @@ class XClient: dinu.window.Window {
 		dc.noclip;
 	}
 
+	void showOutput(){
+		options.lines = 15;
+		int height = 1.em*(options.lines+1)+0.8.em-1;
+		XResizeWindow(display, handle, size.w, height);
+		XMoveWindow(display, handle, pos.x, pos.y-height+size.h);
+		windowAnimation = new AnimationExpIn(pos.y-height+size.h, options.y, 0.1+size.h/4000.0);
+	}
+
 	void drawOutput(int[2] pos, int[2] size, int sep){
 		dc.rect(pos, size, options.colorOutputBg);
 		auto matches = output.dup;
@@ -101,6 +132,12 @@ class XClient: dinu.window.Window {
 			match.draw(dc, [pos.x+sep+padding, y], start+i == selected);
 			dc.noclip;
 		}
+	}
+
+	override void destroy(){
+		windowAnimation = new AnimationExpOut(pos.y, -size.h, 0.1 + size.h/4000.0);
+		shouldClose = true;
+		XUngrabKeyboard(display, CurrentTime);
 	}
 
 	override void onKey(XKeyEvent* ev){
@@ -156,9 +193,7 @@ class XClient: dinu.window.Window {
 			case XK_ISO_Left_Tab:
 			case XK_Up:
 				if(!options.lines && commandBuilder.selected == -1){
-					options.lines = 15;
-					int height = 1.em*(options.lines+1)+0.8.em-1;
-					XResizeWindow(display, handle, size.w, height);
+					showOutput;
 				}else
 					commandBuilder.select(commandBuilder.selected-1);
 				return;
@@ -166,9 +201,7 @@ class XClient: dinu.window.Window {
 			case XK_KP_Enter:
 				commandBuilder.run(!(ev.state & ControlMask));
 				if(ev.state & ShiftMask && !options.lines){
-					options.lines = 15;
-					int height = 1.em*(options.lines+1)+0.8.em-1;
-					XResizeWindow(display, handle, size.w, height);
+					showOutput;
 				}
 				if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
 					close();
