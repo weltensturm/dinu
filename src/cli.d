@@ -10,7 +10,6 @@ import
 
 void fill(T)(ref T object, string[] args){
 	try{
-		writeln(args);
 		foreach(member; __traits(allMembers, T)) {
 			foreach(attr; __traits(getAttributes, mixin("object."~member))){
 				foreach(i, arg; args){

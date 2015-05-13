@@ -9,6 +9,7 @@ import
 	std.path,
 	std.string,
 	std.array,
+	std.stdio,
 	dinu.dinu,
 	dinu.util,
 	dinu.content.content,
@@ -84,9 +85,15 @@ class CommandSpecial: CommandExec {
 	override void run(){
 		final switch(name){
 			case "cd":
-				chdir(parameter.expandTilde.unixClean);
-				std.file.write(options.configPath, getcwd);
 				log("%s exec %s!%s!%s".format(0, Type.special, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
+				try{
+					chdir(parameter.expandTilde.unixClean);
+					std.file.write(options.configPath, getcwd);
+					log("%s exit %s".format(0, 0));
+				}catch(Exception e){
+					writeln(e);
+					log("%s exit %s".format(0, 1));
+				}
 				break;
 			case "clear":
 				commandBuilder.clearOutput;
@@ -118,7 +125,6 @@ class CommandDesktop: Command {
 	override int draw(DrawingContext dc, int[2] pos, bool selected){
 		int origX = pos.x;
 		pos.x += super.draw(dc, pos, selected);
-		//pos.x += dc.text(pos, exec, options.colorHint);
 		return pos.x-origX;
 	}
 
