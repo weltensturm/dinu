@@ -65,11 +65,15 @@ void main(string[] args){
 			options.usage;
 			return;
 		}
-		options.configPath = options.configPath.expandTilde;
-		if(!options.configPath.dirName.exists)
-			mkdirRecurse(options.configPath.dirName);
-		if(options.configPath.exists)
-			chdir(options.configPath.expandTilde.readText.strip);
+		try{
+			options.configPath = options.configPath.expandTilde;
+			if(!options.configPath.dirName.exists)
+				mkdirRecurse(options.configPath.dirName);
+			if(options.configPath.exists)
+				chdir(options.configPath.expandTilde.readText.strip);
+		}catch(Exception e){
+			writeln(e);
+		}
 		windowLoop;
 	}catch(Throwable t){
 		writeln(t);

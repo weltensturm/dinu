@@ -103,7 +103,7 @@ class CommandBuilder {
 			if(c.type == Type.history){
 				synchronized(this)
 					history = c ~ history;
-				choiceFilter.addChoice(c);
+				choiceFilter.add(c);
 			}
 			synchronized(this){
 				if(c.score >= 10000*999)
@@ -136,19 +136,19 @@ class CommandBuilder {
 	void resetChoices(){
 		bashCompletions = [];
 		synchronized(this)
-			choiceFilter.setChoices(history);
+			choiceFilter.set(history.dup);
 
 		if(execLoader)
 			execLoader.stop;
 		execLoader = new ExecutablesLoader;
-		execLoader.each(&choiceFilter.addChoice);
+		execLoader.each(&choiceFilter.add);
 
 		if(processLoader)
 			processLoader.stop;
 		processLoader = new TalkProcessLoader;
-		processLoader.each(&choiceFilter.addChoice);
+		processLoader.each(&choiceFilter.add);
 
-		scannedDirs = [getcwd];
+		scannedDirs = [];
 		if(filesLoader)
 			filesLoader.stop;
 		filesLoader = new FilesLoader(getcwd, 2, &dirLoaded);
@@ -161,10 +161,9 @@ class CommandBuilder {
 						scannedDirs ~= c.text;
 				}
 			}
-			choiceFilter.addChoice(c);
+			choiceFilter.add(c);
 		});
 
-		choiceFilter.start({});
 		choiceFilter.reset(text);
 	}
 
@@ -180,10 +179,14 @@ class CommandBuilder {
 		bashCompletions = [];
 		if(command.length > 1){
 			task({
-				foreach(c; loadParams(toString))
+				l:foreach(c; loadParams(toString)){
+					foreach(e; bashCompletions)
+						if(e.text == c)
+							continue l;
 					bashCompletions ~= new CommandBashCompletion(c);
+				}
 				if(bashCompletions.length){
-					choiceFilter.setChoices(bashCompletions);
+					choiceFilter.set(bashCompletions);
 					resetFilter;
 				}
 			}).executeInNewThread;
@@ -207,7 +210,7 @@ class CommandBuilder {
 		if(!commandSelected){
 			auto res = choiceFilter.res;
 			if(res.length && selected >= -1)
-				commandSelected = res[selected<0 ? 0 : selected].data;
+				commandSelected = res[cast(size_t)(selected<0 ? 0 : selected)].data;
 			else
 				commandSelected = new CommandExec(command[0]);
 		}
@@ -218,7 +221,8 @@ class CommandBuilder {
 		if(r){
 			reset;
 			resetChoices;
-		}
+		}else
+			commandSelected.parameter = "";
 	}
 
 	// Choice selection
@@ -304,7 +308,7 @@ class CommandBuilder {
 			}
 			resetFilter;
 		}else if(!word)
-			cursor = max(0, cast(long)cursor-1);
+			cursor = cast(size_t)max(0, cast(long)cursor-1);
 	}
 
 	void moveRight(bool word=false){
@@ -329,7 +333,7 @@ class CommandBuilder {
 			if(!commandSelected && editing == 0){
 				auto res = choiceFilter.res;
 				if(res.length && selected >= -1)
-					commandSelected = res[selected<0 ? 0 : selected].data;
+					commandSelected = res[cast(size_t)(selected<0 ? 0 : selected)].data;
 				else
 					commandSelected = new CommandExec(command[0]);
 				text = commandSelected.text;
@@ -348,7 +352,7 @@ class CommandBuilder {
 			filterText = "";
 		}
 		if(!text.length)
-			choiceFilter.reset;
+			choiceFilter.reset("");
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
 		choiceFilter.narrow(s);

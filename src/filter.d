@@ -39,20 +39,8 @@ class FuzzyFilter(T) {
 
 	this(bool delegate(T) filterFunc){
 		this.filterFunc = filterFunc;
-	}
-
-	void start(void delegate() waitLoad){
-
-		if(this.waitLoad)
-			this.waitLoad();
-
-		choices = [];
-
-		this.waitLoad = waitLoad;
 		filterThread = new Thread(&filterLoop);
 		filterThread.start;
-		
-		reset;
 	}
 
 	void reset(string filter=""){
@@ -73,13 +61,13 @@ class FuzzyFilter(T) {
 		return matches;
 	}
 
-	void addChoice(T p){
+	void add(T p){
 		synchronized(this)
 			choices ~= p;
 		tryMatch(p);
 	}
 
-	void setChoices(T[] choices){
+	void set(T[] choices){
 		synchronized(this){
 			this.choices = choices;
 			reset;
@@ -87,6 +75,30 @@ class FuzzyFilter(T) {
 	}
 
 	protected {
+
+		void tryMatch(T p){
+			if(!filterFunc(p))
+				return;
+			Match match;
+			match.score = p.filterText.cmpFuzzy(filter);
+			if(match.score > 0){
+				match.score += p.score;
+				match.data = p;
+				synchronized(this){
+					foreach(i, e; matches){
+						if(restart)
+							break;
+						if(e.score <= match.score){
+							if(e.score == match.score && e.data.filterText.icmp(match.data.filterText) < 0)
+								continue;
+							matches = matches[0..i] ~ match ~ matches[i..$];
+							return;
+						}
+					}
+					matches ~= match;
+				}
+			}
+		}
 
 		void intReset(string filter){
 			T[] cpy;
@@ -124,30 +136,6 @@ class FuzzyFilter(T) {
 			}
 			synchronized(this)
 				idle = true;
-		}
-
-		void tryMatch(T p){
-			if(!filterFunc(p))
-				return;
-			Match match;
-			match.score = p.filterText.cmpFuzzy(filter);
-			if(match.score > 0){
-				match.score += p.score;
-				match.data = p;
-				synchronized(this){
-					foreach(i, e; matches){
-						if(restart)
-							break;
-						if(e.score <= match.score){
-							if(e.score == match.score && e.data.filterText.icmp(match.data.filterText) < 0)
-								continue;
-							matches = matches[0..i] ~ match ~ matches[i..$];
-							return;
-						}
-					}
-					matches ~= match;
-				}
-			}
 		}
 
 		void filterLoop(){
@@ -204,20 +192,5 @@ long cmpFuzzy(string str, string sub){
 	if(sub == str)
 		largestScore += 10000000;
 	return largestScore;
-}
-
-
-long phoneticalScore(string str){
-	long score = 0;
-	foreach(i, c; str){
-		score += cast(long)c / (i*5 + 1);
-	}
-	return score;
-}
-
-
-unittest {
-	assert("asbsdf".cmpFuzzy("asdf") > "absdf".cmpFuzzy("asdf"));
-	assert("dlist-edgeflag-dangling".cmpFuzzy("pidgin") == 0);
 }
 

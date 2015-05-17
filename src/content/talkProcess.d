@@ -14,8 +14,8 @@ class TalkProcessLoader: ChoiceLoader {
 
 	override void run(){
 		foreach(d; "/proc".dirContent){
-			if((getAttributes(d) & S_IRUSR) && d.isDir && (d ~ "/comm").exists){
-				add(new CommandTalkProcess(d.chompPrefix("/proc/"), (d ~ "/comm").read.to!string.strip));
+			if((getAttributes(d) & S_IRUSR) && d.isDir && (d ~ "/comm").exists && d.chompPrefix("/proc/").isNumeric){
+				add(new CommandTalkProcess(d.chompPrefix("/proc/").to!size_t, (d ~ "/comm").read.to!string.strip));
 			}
 		}
 	}
@@ -26,13 +26,17 @@ class TalkProcessLoader: ChoiceLoader {
 class CommandTalkProcess: Command {
 
 	string command;
-	string pid;
+	size_t pid;
 
-	this(string pid, string command){
-		super("@" ~ pid);
+	this(size_t pid, string command){
+		super("@%s".format(pid));
 		this.pid = pid;
 		this.command = command;
 		type = Type.processInfo;
+	}
+
+	override size_t score(){
+		return to!int(pid)+1000;
 	}
 
 	override string filterText(){
@@ -44,7 +48,7 @@ class CommandTalkProcess: Command {
 	}
 
 	override void run(){
-		("/proc/" ~ pid ~ "/fd/0").write(parameter ~ '\n');
+		"/proc/%s/fd/0".format(pid).write(parameter ~ '\n');
 	}
 
 }

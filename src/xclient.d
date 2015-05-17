@@ -34,7 +34,12 @@ int em(double mod){
 	return cast(int)(round(em1*mod));
 }
 
-
+double eerp(double current, double target, double speed){
+	auto dir = current > target ? -1 : 1;
+	auto spd = abs(target-current).pow(1.5)*speed+speed;
+	spd = spd.min(abs(target-current)).max(0);
+	return current + spd*dir;
+}
 
 class XClient: dinu.window.Window {
 
@@ -42,8 +47,9 @@ class XClient: dinu.window.Window {
 	int padding;
 	int animationY;
 	bool shouldClose;
-	long lastDraw;
+	long lastUpdate;
 	double animStart;
+	double scrollCurrent = 0;
 
 	Animation windowAnimation;
 
@@ -62,16 +68,22 @@ class XClient: dinu.window.Window {
 		show;
 		grabKeyboard;
 		padding = 0.4.em;
-		lastDraw = Clock.currSystemTick.msecs;
+		lastUpdate = Clock.currSystemTick.msecs;
 		windowAnimation = new AnimationExpIn(pos.y, 0, 0.1+size.h/4000.0);
 	}
 
 	void update(){
+		auto cur = Clock.currSystemTick.msecs;
+		auto delta = cur-lastUpdate;
+		lastUpdate = cur;
 		int targetY = cast(int)windowAnimation.calculate;
 		if(targetY != pos.y)
 			move([pos.x, targetY]);
 		else if(windowAnimation.done && shouldClose)
 			super.destroy;
+		auto matches = output.dup;
+		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
+		scrollCurrent = scrollCurrent.eerp(min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2)), delta/200.0);
 	}
 
 	override void draw(){
@@ -123,9 +135,9 @@ class XClient: dinu.window.Window {
 		dc.rect(pos, size, options.colorOutputBg);
 		auto matches = output.dup;
 		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
-		long start = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
-		foreach(i, match; matches[start..min($, start+options.lines)]){
-			int y = cast(int)(pos.y+size.h - size.h*(i+1)/cast(double)options.lines);
+		auto start = cast(size_t)scrollCurrent;
+		foreach(i, match; matches[start..min($, start+options.lines+1)]){
+			int y = cast(int)(pos.y+size.h - size.h*(i+1-(scrollCurrent-start))/cast(double)options.lines);
 			if(start+i == selected)
 				dc.rect([pos.x+sep, y], [size.w/2, 1.em], options.colorHintBg);
 			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);

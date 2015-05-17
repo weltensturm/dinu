@@ -9,6 +9,7 @@ import
 	std.conv,
 	std.regex,
 	std.string,
+	std.stdio,
 	dinu.dinu,
 	dinu.util,
 	dinu.xclient,
@@ -61,27 +62,31 @@ class OutputLoader: ChoiceLoader {
 	}
 
 	void matchLine(string line, size_t idx){
-		foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
-			auto pid = to!int(match.captures[1]);
-			if(match.captures[2] == "exec"){
-				auto cmd = match.captures[3].bangSplit;
-				auto history = new CommandHistory(idx, pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
-				running[pid] = history;
-				if(pid in results){
-					history.result = results[pid];
-				}else if(!exists("/proc/%s".format(pid))){
-					history.result = 0;
+		try{
+			foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
+				auto pid = to!int(match.captures[1]);
+				if(match.captures[2] == "exec"){
+					auto cmd = match.captures[3].bangSplit;
+					auto history = new CommandHistory(idx, pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
+					running[pid] = history;
+					if(pid in results){
+						history.result = results[pid];
+					}else if(!exists("/proc/%s".format(pid))){
+						history.result = 0;
+					}
+					add(history);
 				}
-				add(history);
+				if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
+					add(new CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
+				}else if(match.captures[2] == "exit"){
+					if(pid in running)
+						running[pid].result = to!int(match.captures[3]);
+					else
+						results[pid] = to!int(match.captures[3]);
+				}
 			}
-			if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
-				add(new CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
-			}else if(match.captures[2] == "exit"){
-				if(pid in running)
-					running[pid].result = to!int(match.captures[3]);
-				else
-					results[pid] = to!int(match.captures[3]);
-			}
+		}catch(Exception e){
+			writeln(e);
 		}
 	}
 

@@ -36,25 +36,46 @@ class FilesLoader: ChoiceLoader {
 	}
 
 	private void loadFiles(string dir, int depth){
-		dir = dir.chompPrefix(getcwd ~ '/').chomp("/") ~ "/";
+		dir = dir.expandTilde.chompPrefix(getcwd ~ '/').chomp("/") ~ "/";
 		if(dirCompleted(dir))
 			return;
-		foreach(i, entry; dir.expandTilde.dirContent){
+		foreach(i, entry; dir.dirContent){
 			string path = buildNormalizedPath(entry).chompPrefix(getcwd ~ '/').unixClean;
 			try{
-				if(entry.isDir){
-					if(depth){
-						loadFiles(entry, depth-1);
-					}
-					add(new CommandDir(path.unixEscape));
+				if(entry.expandTilde.isDir){
+					if(depth)
+						loadFiles(entry.expandTilde, depth-1);
+					addEntry(path, Type.directory);
 				}else{
 					auto attr = getAttributes(path);
 					if(attr & (1 + (1<<3)))
-						add(new CommandExec(path.unixEscape));
-					add(new CommandFile(path.unixEscape));
+						addEntry(path, Type.script);
+					addEntry(path, Type.file);
 				}
 			}catch(Throwable t){
 				writeln(t);
+			}
+		}
+	}
+
+	void addEntry(string path, Type type){
+		string[] paths = [path];
+		if(path.chompPrefix("~".expandTilde) != path){
+			paths ~= "~" ~ path.chompPrefix("~".expandTilde);
+		}
+		foreach(p; paths){
+			switch(type){
+				case Type.directory:
+					add(new CommandDir(p));
+					break;
+				case Type.script:
+					add(new CommandExec(p));
+					break;
+				case Type.file:
+					add(new CommandFile(p));
+					break;
+				default:
+					break;
 			}
 		}
 	}
@@ -110,6 +131,10 @@ class CommandDir: CommandFile {
 		type = Type.directory;
 		super(name);
 		parts ~= "";
+	}
+
+	override string filterText(){
+		return super.filterText ~ '/';
 	}
 
 	override size_t score(){
