@@ -41,6 +41,8 @@ struct Options {
 	@("-c") string configPath = "~/.dinu/default";
 	@("-s") int screen;
 
+	@("-a") double animations = 1;
+
 	@("-cb") string colorBg = "#252525";
 	@("-ci") string colorInput = "#ffffff";
 	@("-cib") string colorInputBg = "#454545";

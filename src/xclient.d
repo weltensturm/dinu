@@ -50,6 +50,7 @@ class XClient: dinu.window.Window {
 	long lastUpdate;
 	double animStart;
 	double scrollCurrent = 0;
+	double selectCurrent = 0;
 
 	Animation windowAnimation;
 
@@ -69,7 +70,7 @@ class XClient: dinu.window.Window {
 		grabKeyboard;
 		padding = 0.4.em;
 		lastUpdate = Clock.currSystemTick.msecs;
-		windowAnimation = new AnimationExpIn(pos.y, 0, 0.1+size.h/4000.0);
+		windowAnimation = new AnimationExpIn(pos.y, 0, (0.1+size.h/4000.0)*options.animations);
 	}
 
 	void update(){
@@ -83,7 +84,14 @@ class XClient: dinu.window.Window {
 			super.destroy;
 		auto matches = output.dup;
 		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
-		scrollCurrent = scrollCurrent.eerp(min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2)), delta/200.0);
+		auto scrollTarget = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
+		if(options.animations > 0){
+			scrollCurrent = scrollCurrent.eerp(scrollTarget, delta/150.0);
+			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/150.0);
+		}else{
+			scrollCurrent = scrollTarget;
+			selectCurrent = commandBuilder.selected;
+		}
 	}
 
 	override void draw(){
@@ -91,15 +99,15 @@ class XClient: dinu.window.Window {
 			return;
 		assert(thread_isMainThread);
 
-		dc.rect([0,0], [size.w, size.h], options.colorBg);
 		int separator = size.w/4;
-		drawInput([0, options.lines*1.em], [size.w, size.h-1.em*options.lines], separator);
 		drawOutput([0, 0], [size.w, 1.em*options.lines], separator);
+		drawInput([0, options.lines*1.em], [size.w, size.h-1.em*options.lines], separator);
 		super.draw;
 	}
 
 	void drawInput(int[2] pos, int[2] size, int sep){
 		auto paddingVert = 0.2.em;
+		dc.rect(pos, size, options.colorBg);
 		dc.rect([sep, pos.y+paddingVert], [size.w/2, size.h-paddingVert*2], options.colorInputBg);
 		// cwd
 		int textY = pos.y+size.h/2-0.5.em;
@@ -123,31 +131,36 @@ class XClient: dinu.window.Window {
 		dc.noclip;
 	}
 
-	void showOutput(){
-		options.lines = 15;
-		int height = 1.em*(options.lines+1)+0.8.em-1;
-		XResizeWindow(display, handle, size.w, height);
-		XMoveWindow(display, handle, pos.x, pos.y-height+size.h);
-		windowAnimation = new AnimationExpIn(pos.y-height+size.h, options.y, 0.1+size.h/4000.0);
-	}
-
 	void drawOutput(int[2] pos, int[2] size, int sep){
 		dc.rect(pos, size, options.colorOutputBg);
 		auto matches = output.dup;
 		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
 		auto start = cast(size_t)scrollCurrent;
+		if(selectCurrent < -1)
+			dc.rect([pos.x+sep, cast(int)(pos.y+size.h - size.h*(-1-selectCurrent-scrollCurrent)/cast(double)options.lines)], [size.w/2, 1.em], options.colorHintBg);
 		foreach(i, match; matches[start..min($, start+options.lines+1)]){
 			int y = cast(int)(pos.y+size.h - size.h*(i+1-(scrollCurrent-start))/cast(double)options.lines);
-			if(start+i == selected)
-				dc.rect([pos.x+sep, y], [size.w/2, 1.em], options.colorHintBg);
 			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);
 			match.draw(dc, [pos.x+sep+padding, y], start+i == selected);
 			dc.noclip;
 		}
+		if(matches.length > 15){
+			double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)14).log2));
+			int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1-scrollCurrent/(max(1.0, matches.length-15))));
+			dc.rect([size.w/4*3-0.2.em, scrollbarOffset], [0.2.em, cast(int)scrollbarHeight], options.colorHintBg);
+		}
+	}
+
+	void showOutput(){
+		options.lines = 15;
+		int height = 1.em*(options.lines+1)+0.8.em-1;
+		XResizeWindow(display, handle, size.w, height);
+		XMoveWindow(display, handle, pos.x, pos.y-height+size.h);
+		windowAnimation = new AnimationExpIn(pos.y-height+size.h, options.y, (0.1+size.h/4000.0)*options.animations);
 	}
 
 	override void destroy(){
-		windowAnimation = new AnimationExpOut(pos.y, -size.h, 0.1 + size.h/4000.0);
+		windowAnimation = new AnimationExpOut(pos.y, -size.h, (0.1+size.h/4000.0)*options.animations);
 		shouldClose = true;
 		XUngrabKeyboard(display, CurrentTime);
 	}
@@ -209,6 +222,12 @@ class XClient: dinu.window.Window {
 				}else
 					commandBuilder.select(commandBuilder.selected-1);
 				return;
+			case XK_Page_Up:
+				commandBuilder.select(commandBuilder.selected-options.lines);
+				break;
+			case XK_Page_Down:
+				commandBuilder.select(commandBuilder.selected+options.lines);
+				break;
 			case XK_Return:
 			case XK_KP_Enter:
 				commandBuilder.run(!(ev.state & ControlMask));

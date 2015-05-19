@@ -168,6 +168,8 @@ class CommandBuilder {
 	}
 
 	void resetState(bool force=false){
+		if(!force && editing == 0)
+			commandSelected = null;
 		if(force || editing != 0 || !text.length){
 			commandHistory = false;
 			filterText = "";
@@ -205,7 +207,7 @@ class CommandBuilder {
 	}
 
 	void run(bool r=true){
-		if(!command[0].length)
+		if(!command[0].length && !commandHistory)
 			return;
 		if(!commandSelected){
 			auto res = choiceFilter.res;
@@ -219,8 +221,7 @@ class CommandBuilder {
 			commandSelected.parameter = command[1..$].reduce!"a ~ ' ' ~ b";
 		commandSelected.run;
 		if(r){
-			reset;
-			resetChoices;
+			deleteLeft;
 		}else
 			commandSelected.parameter = "";
 	}

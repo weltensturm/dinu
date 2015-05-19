@@ -160,6 +160,10 @@ class CommandHistory: Command {
 		this.name = command.text;
 	}
 
+	override string filterText(){
+		return super.filterText() ~ parameter;
+	}
+
 	override size_t score(){
 		return idx*1000;
 	}
