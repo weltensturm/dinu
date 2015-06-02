@@ -36,7 +36,7 @@ int em(double mod){
 
 double eerp(double current, double target, double speed){
 	auto dir = current > target ? -1 : 1;
-	auto spd = abs(target-current).pow(1.5)*speed+speed;
+	auto spd = abs(target-current)*speed+speed;
 	spd = spd.min(abs(target-current)).max(0);
 	return current + spd*dir;
 }
@@ -87,7 +87,7 @@ class XClient: dinu.window.Window {
 		auto scrollTarget = min(max(0, cast(long)matches.length-cast(long)options.lines), max(0, selected+1-options.lines/2));
 		if(options.animations > 0){
 			scrollCurrent = scrollCurrent.eerp(scrollTarget, delta/150.0);
-			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/150.0);
+			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/50.0);
 		}else{
 			scrollCurrent = scrollTarget;
 			selectCurrent = commandBuilder.selected;

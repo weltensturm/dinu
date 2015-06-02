@@ -172,8 +172,6 @@ class DrawingContext {
 			font.set = XCreateFontSet(dpy, cast(char*)fontstr, &missing, &n, &def);
 		if(!font.set)
 			font.xft_font = XftFontOpenName(dpy, DefaultScreen(dpy), cast(char*)fontstr);
-
-		import std.stdio;
 		if(font.xfont){
 			font.ascent = font.xfont.ascent;
 			font.descent = font.xfont.descent;
@@ -186,6 +184,8 @@ class DrawingContext {
 				font.width   = max(font.width,   cast(int)xfonts[i].max_bounds.width);
 			}
 		}else if(font.xft_font){
+			int screen = DefaultScreen(dpy);
+			xftdraw = XftDrawCreate(dpy, canvas, DefaultVisual(dpy,screen), DefaultColormap(dpy,screen));
 			font.ascent = font.xft_font.ascent;
 			font.descent = font.xft_font.descent;
 			font.width = font.xft_font.max_advance_width;
@@ -205,11 +205,8 @@ class DrawingContext {
 		if(canvas)
 			XFreePixmap(dpy, canvas);
 		canvas = XCreatePixmap(dpy, DefaultRootWindow(dpy), size.w, size.h, DefaultDepth(dpy, screen));
-		xftdraw = XftDrawCreate(dpy, canvas, DefaultVisual(dpy,screen), DefaultColormap(dpy,screen));
-		if(!(xftdraw))
-			throw new Exception("error, cannot create xft drawable");
-		if(font.name.length)
-			initfont(font.name);
+		if(xftdraw)
+			XftDrawChange(xftdraw, canvas);
 	}
 
 	int textWidth(string c){
@@ -255,6 +252,8 @@ extern(C){
 	struct FcCharSet{}
 	struct FcPattern{}
 	void XftFontClose(Display*, XftFont*);
+	XftDraw *XftDrawCreate (Display*, Drawable, Visual*, Colormap);
+	void XftDrawChange(XftDraw*, Drawable);
 	void XftDrawDestroy(XftDraw*);
 	void XftDrawStringUtf8(XftDraw*, XftColor*, XftFont*, int, int, char*, int);
 	void XftDrawString32(XftDraw*, XftColor*, XftFont*, int, int, dchar*, int);
@@ -263,7 +262,6 @@ extern(C){
 	void XftColorFree(Display*, Visual*, Colormap, XftColor*);
 	Bool XftColorAllocName (Display*, Visual*, Colormap, char*, XftColor*);
 	XftFont* XftFontOpenName (Display*, int , char *);
-	XftDraw *XftDrawCreate (Display*, Drawable, Visual*, Colormap);
 	void XftTextExtentsUtf8(Display*, XftFont*, char*, int, XGlyphInfo*);
 
 	struct XGlyphInfo {

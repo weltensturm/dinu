@@ -25,6 +25,9 @@ __gshared:
 FuzzyFilter!Command choiceFilter;
 Command[] output;
 
+bool isText(char c){
+	return !c.isWhite && c != '/';
+}
 
 void delChar(ref string text, size_t cursor){
 	if(cursor < text.length)
@@ -42,8 +45,8 @@ void deleteWordLeft(ref string text, ref size_t cursor){
 	if(!text.length)
 		return;
 	text.delBackChar(cursor);
-	bool mode = text[cursor-1].isWhite;
-	while(cursor && mode == text[cursor-1].isWhite){
+	bool mode = text[cursor-1].isText;
+	while(cursor && mode == text[cursor-1].isText){
 		text = text[0..cursor-1] ~ text[cursor..$];
 		cursor--;
 	}
@@ -51,8 +54,8 @@ void deleteWordLeft(ref string text, ref size_t cursor){
 
 void deleteWordRight(ref string text, size_t cursor){
 	text.delChar(cursor);
-	bool mode = text[cursor].isWhite;
-	while(cursor && mode == text[cursor-1].isWhite)
+	bool mode = text[cursor].isText;
+	while(cursor && mode == text[cursor-1].isText)
 		text = text[0..cursor] ~ text[cursor+1..$];
 }
 
@@ -257,27 +260,26 @@ class CommandBuilder {
 				return;
 			}
 		}
-		if(selected < res.length){
-			auto sel = res[cast(size_t)selected].data;
-			if(editing == 0 || commandHistory){
-				if(sel.type == Type.history)
-					commandSelected = (cast(CommandHistory)sel).command;
-				else
-					commandSelected = sel;
-				if(commandHistory){
-					command = [commandSelected.text];
-					if(sel.parameter.length)
-						command ~= sel.parameter;
-					editing = command.length-1;
-				}else{
-					command[0] = commandSelected.text;
-				}
+		selected = selected.min(res.length-1);
+		auto sel = res[cast(size_t)selected].data;
+		if(editing == 0 || commandHistory){
+			if(sel.type == Type.history)
+				commandSelected = (cast(CommandHistory)sel).command;
+			else
+				commandSelected = sel;
+			if(commandHistory){
+				command = [commandSelected.text];
+				if(sel.parameter.length)
+					command ~= sel.parameter;
+				editing = command.length-1;
 			}else{
-				text = sel.text;
+				command[0] = commandSelected.text;
 			}
-			cursor = text.length;
-			this.selected = selected;
+		}else{
+			text = sel.text;
 		}
+		cursor = text.length;
+		this.selected = selected;
 	}
 
 	void selectOutput(long selected){
@@ -329,7 +331,6 @@ class CommandBuilder {
 	// Text altering
 
 	void insert(string s){
-		filterText = "";
 		if(cursor == text.length && s == " " && (cursor<2 || text[cursor-2] != '\\')){
 			if(!commandSelected && editing == 0){
 				auto res = choiceFilter.res;
@@ -350,13 +351,17 @@ class CommandBuilder {
 
 		if(editing == 0){
 			commandSelected = null;
-			filterText = "";
 		}
 		if(!text.length)
 			choiceFilter.reset("");
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
 		choiceFilter.narrow(s);
+
+		if(filterText.length){
+			filterText = "";
+			resetFilter;
+		}
 		select(-1);
 
 		checkNativeCompletions;

@@ -40,42 +40,24 @@ class FilesLoader: ChoiceLoader {
 		if(dirCompleted(dir))
 			return;
 		foreach(i, entry; dir.dirContent){
-			string path = buildNormalizedPath(entry).chompPrefix(getcwd ~ '/').unixClean;
+			string path = entry
+				.expandTilde
+				.buildNormalizedPath
+				.chompPrefix(getcwd ~ '/')
+				.unixClean;
 			try{
-				if(entry.expandTilde.isDir){
+				if(entry.isDir){
 					if(depth)
-						loadFiles(entry.expandTilde, depth-1);
-					addEntry(path, Type.directory);
+						loadFiles(entry, depth-1);
+					add(new CommandDir(path));
 				}else{
 					auto attr = getAttributes(path);
 					if(attr & (1 + (1<<3)))
-						addEntry(path, Type.script);
-					addEntry(path, Type.file);
+						add(new CommandExec(path));
+					add(new CommandFile(path));
 				}
 			}catch(Throwable t){
 				writeln(t);
-			}
-		}
-	}
-
-	void addEntry(string path, Type type){
-		string[] paths = [path];
-		if(path.chompPrefix("~".expandTilde) != path){
-			paths ~= "~" ~ path.chompPrefix("~".expandTilde);
-		}
-		foreach(p; paths){
-			switch(type){
-				case Type.directory:
-					add(new CommandDir(p));
-					break;
-				case Type.script:
-					add(new CommandExec(p));
-					break;
-				case Type.file:
-					add(new CommandFile(p));
-					break;
-				default:
-					break;
 			}
 		}
 	}
@@ -91,16 +73,28 @@ class FilesLoader: ChoiceLoader {
 
 class CommandFile: Command {
 
-	private this(){}
+	immutable bool home;
+
+	private this(){home=false;}
 
 	this(string name){
 		this.name = name;
 		type = Type.file;
 		color = options.colorFile;
 		parts = name.split('/');
+		home = (
+			name.chompPrefix("~".expandTilde) != name
+			|| !name.startsWith("/") && getcwd == "~".expandTilde
+		);
 	}
 
 	string[] parts;
+
+	override string filterText(){
+		if(home)
+			return "~/" ~ name;
+		return name;
+	}
 
 	override size_t score(){
 		return 10;
@@ -131,10 +125,6 @@ class CommandDir: CommandFile {
 		type = Type.directory;
 		super(name);
 		parts ~= "";
-	}
-
-	override string filterText(){
-		return super.filterText ~ '/';
 	}
 
 	override size_t score(){

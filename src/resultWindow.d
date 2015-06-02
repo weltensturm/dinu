@@ -57,7 +57,7 @@ class ResultWindow: Window {
 					max(0, commandBuilder.selected-options.lines/2));
 		if(options.animations > 0){
 			scrollCurrent = scrollCurrent.eerp(scrollTarget, delta/150.0/options.animations);
-			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/150.0/options.animations);
+			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/100.0/options.animations);
 		}else{
 			scrollCurrent = scrollTarget;
 			selectCurrent = commandBuilder.selected;

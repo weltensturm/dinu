@@ -41,6 +41,8 @@ struct Options {
 	@("-c") string configPath = "~/.dinu/default";
 	@("-s") int screen;
 
+	@("-e") string execute;
+
 	@("-a") double animations = 1;
 
 	@("-cb") string colorBg = "#252525";
@@ -98,6 +100,11 @@ void windowLoop(){
 		windowResults.destroy;
 		runProgram = false;
 	};
+
+	if(options.execute.length){
+		commandBuilder.text = options.execute;
+		commandBuilder.run;
+	} 
 
 	scope(exit)
 		close();
