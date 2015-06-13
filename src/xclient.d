@@ -113,9 +113,20 @@ class XClient: dinu.window.Window {
 		int textY = pos.y+size.h/2-0.5.em;
 		dc.text([pos.x+sep, textY], getcwd, commandBuilder.commandHistory ? options.colorExec : options.colorHint, 1.4);
 		dc.clip([pos.x+size.w/4, pos.y], [size.w/2, size.h]);
-		int textWidth = dc.textWidth(commandBuilder.toString ~ "..");
+		int textWidth = dc.textWidth(commandBuilder.cursorPart ~ "..");
 		int offset = -max(0, textWidth-size.w/2);
 		int textStart = offset+pos.x+sep+padding;
+		// cursor
+		auto selStart = min(commandBuilder.cursor, commandBuilder.cursorStart);
+		auto selEnd = max(commandBuilder.cursor, commandBuilder.cursorStart);
+		int cursorOffset = padding+offset+pos.x+sep+dc.textWidth(commandBuilder.finishedPart);
+		int selpos = cursorOffset+dc.textWidth(commandBuilder.text[0..selEnd]);
+		if(commandBuilder.cursorStart != commandBuilder.cursor){
+			auto start = cursorOffset+dc.textWidth(commandBuilder.text[0..selStart]);
+			dc.rect([start, pos.y+paddingVert*2], [selpos-start, size.y-paddingVert*4], options.colorHint);
+		}
+		int curpos = cursorOffset+dc.textWidth(commandBuilder.text[0..commandBuilder.cursor]);
+		dc.rect([curpos, pos.y+paddingVert*2], [1, size.y-paddingVert*4], options.colorInput);
 		// input
 		if(!commandBuilder.commandSelected){
 			dc.text([textStart, textY], commandBuilder.toString, options.colorInput);
@@ -124,10 +135,6 @@ class XClient: dinu.window.Window {
 			foreach(param; commandBuilder.command[1..$])
 				xoff += dc.text([xoff, textY], param ~ ' ', options.colorInput);
 		}
-		// cursor
-		int cursorOffset = dc.textWidth(commandBuilder.finishedPart);
-		int curpos = padding+offset+pos.x+sep+cursorOffset + dc.textWidth(commandBuilder.text[0..commandBuilder.cursor]);
-		dc.rect([curpos, pos.y+paddingVert*2], [1, size.y-paddingVert*4], options.colorInput);
 		dc.noclip;
 	}
 
@@ -188,9 +195,18 @@ class XClient: dinu.window.Window {
 				case XK_Delete:
 					commandBuilder.deleteWordRight;
 					return;
+				case XK_j:
+					commandBuilder.moveLeft;
+					return;
+				case XK_semicolon:
+					commandBuilder.moveRight;
+					return;
 				case XK_V:
 				case XK_v:
 					XConvertSelection(display, clip, utf8, utf8, handle, CurrentTime);
+					return;
+				case XK_a:
+					commandBuilder.selectAll;
 					return;
 				default:
 					break;
@@ -237,6 +253,10 @@ class XClient: dinu.window.Window {
 				if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
 					close();
 				return;
+			case XK_Shift_L:
+			case XK_Shift_R:
+				commandBuilder.shiftDown = !commandBuilder.shiftDown;
+				break;
 			default:
 				break;
 		}

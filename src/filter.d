@@ -74,6 +74,18 @@ class FuzzyFilter(T) {
 		}
 	}
 
+	void remove(T[] choices){
+		if(!choices.length)
+			return;
+		synchronized(this){
+			auto old = this.choices;
+			this.choices = [];
+			foreach(o; old)
+				if(!choices.canFind(o))
+					this.choices ~= o;
+		}
+	}
+
 	protected {
 
 		void tryMatch(T p){

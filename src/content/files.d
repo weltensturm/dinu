@@ -36,7 +36,11 @@ class FilesLoader: ChoiceLoader {
 	}
 
 	private void loadFiles(string dir, int depth){
-		dir = dir.expandTilde.chompPrefix(getcwd ~ '/').chomp("/") ~ "/";
+		dir = dir
+			.unixClean
+			.expandTilde
+			.chompPrefix(getcwd ~ '/')
+			.chomp("/") ~ "/";
 		if(dirCompleted(dir))
 			return;
 		foreach(i, entry; dir.dirContent){
@@ -44,11 +48,11 @@ class FilesLoader: ChoiceLoader {
 				.expandTilde
 				.buildNormalizedPath
 				.chompPrefix(getcwd ~ '/')
-				.unixClean;
+				.unixEscape;
 			try{
 				if(entry.isDir){
 					if(depth)
-						loadFiles(entry, depth-1);
+						loadFiles(path, depth-1);
 					add(new CommandDir(path));
 				}else{
 					auto attr = getAttributes(path);

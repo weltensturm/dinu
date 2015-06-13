@@ -42,9 +42,11 @@ void delBackChar(ref string text, ref size_t cursor){
 }
 
 void deleteWordLeft(ref string text, ref size_t cursor){
-	if(!text.length)
+	if(!text.length || !cursor)
 		return;
 	text.delBackChar(cursor);
+	if(!cursor)
+		return;
 	bool mode = text[cursor-1].isText;
 	while(cursor && mode == text[cursor-1].isText){
 		text = text[0..cursor-1] ~ text[cursor..$];
@@ -54,9 +56,12 @@ void deleteWordLeft(ref string text, ref size_t cursor){
 
 void deleteWordRight(ref string text, size_t cursor){
 	text.delChar(cursor);
+	if(cursor >= text.length)
+		return;
 	bool mode = text[cursor].isText;
-	while(cursor && mode == text[cursor-1].isText)
+	while(cursor < text.length && mode == text[cursor].isText){
 		text = text[0..cursor] ~ text[cursor+1..$];
+	}
 }
 
 
@@ -65,6 +70,8 @@ class CommandBuilder {
 
 	string[] command;
 	size_t editing;
+	size_t cursorStart;
+	bool shiftDown;
 	size_t cursor;
 
 	string filterText;
@@ -125,6 +132,7 @@ class CommandBuilder {
 		command = [""];
 		editing = 0;
 		cursor = 0;
+		cursorStart = 0;
 		filterText = "";
 		commandSelected = null;
 		commandHistory = false;
@@ -180,7 +188,8 @@ class CommandBuilder {
 	}
 
 	void checkNativeCompletions(){
-		auto dirty = bashCompletions.length > 0;
+		choiceFilter.remove(bashCompletions);
+		resetFilter;
 		bashCompletions = [];
 		if(command.length > 1){
 			task({
@@ -188,19 +197,21 @@ class CommandBuilder {
 					foreach(e; bashCompletions)
 						if(e.text == c)
 							continue l;
-					bashCompletions ~= new CommandBashCompletion(c);
-				}
-				if(bashCompletions.length){
-					choiceFilter.set(bashCompletions);
+					auto completion =  new CommandBashCompletion(c);
+					bashCompletions ~= completion;
+					choiceFilter.add(completion);
 					resetFilter;
 				}
 			}).executeInNewThread;
-		}else if(dirty)
-			resetChoices;
+		}
 	}
 
 	string finishedPart(){
 		return reduce!"a ~ ' ' ~ b"("", command[0..editing]);
+	}
+
+	string cursorPart(){
+		return finishedPart ~ text[0..cursor];
 	}
 
 	void clearOutput(){
@@ -237,6 +248,7 @@ class CommandBuilder {
 			if(filterText.length){
 				text = filterText[0..$-1];
 				cursor = text.length;
+				cursorStart = cursor;
 				filterText = "";
 				if(editing == 0 || commandHistory)
 					commandSelected = null;
@@ -279,6 +291,7 @@ class CommandBuilder {
 			text = sel.text;
 		}
 		cursor = text.length;
+		cursorStart = cursor;
 		this.selected = selected;
 	}
 
@@ -292,6 +305,7 @@ class CommandBuilder {
 		else
 			text = '\'' ~ c.text ~ '\'';
 		cursor = text.length;
+		cursorStart = cursor;
 		this.selected = -selected-2;
 	}
 
@@ -301,17 +315,25 @@ class CommandBuilder {
 		return command[editing];
 	}
 
+	void selectAll(){
+		cursorStart = 0;
+		cursor = text.length;
+	}
+
 	void moveLeft(bool word=false){
 		if(editing && cursor == 0){
 			commandHistory = false;
 			editing--;
 			cursor = command[editing].length;
+			cursorStart = cursor;
 			if(editing == 0){
 				commandSelected = null;
 			}
 			resetFilter;
 		}else if(!word)
 			cursor = cast(size_t)max(0, cast(long)cursor-1);
+		if(!shiftDown)
+			cursorStart = cursor;
 	}
 
 	void moveRight(bool word=false){
@@ -321,16 +343,21 @@ class CommandBuilder {
 				select(0);
 			editing++;
 			cursor = 0;
+			cursorStart = 0;
 			selected = -1;
 			resetFilter;
 			commandHistory = false;
 		}else if(!word)
 			cursor = min(cursor+1, text.length);
+		if(!shiftDown)
+			cursorStart = cursor;
 	}
 
 	// Text altering
 
 	void insert(string s){
+		if(cursorStart != cursor)
+			deleteSelection;
 		if(cursor == text.length && s == " " && (cursor<2 || text[cursor-2] != '\\')){
 			if(!commandSelected && editing == 0){
 				auto res = choiceFilter.res;
@@ -344,6 +371,7 @@ class CommandBuilder {
 			command ~= "";
 			editing++;
 			cursor = 0;
+			cursorStart = 0;
 			resetFilter;
 			checkNativeCompletions;
 			return;
@@ -356,6 +384,7 @@ class CommandBuilder {
 			choiceFilter.reset("");
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
+		cursorStart = cursor;
 		choiceFilter.narrow(s);
 
 		if(filterText.length){
@@ -364,7 +393,8 @@ class CommandBuilder {
 		}
 		select(-1);
 
-		checkNativeCompletions;
+		if(s.endsWith("-", "="))
+			checkNativeCompletions;
 
 		auto dir = text.expandTilde.buildNormalizedPath.unixClean;
 		if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
@@ -380,21 +410,34 @@ class CommandBuilder {
 		checkNativeCompletions;
 	}
 
+	void deleteSelection(){
+		text = text[0..min(cursorStart,cursor)] ~ text[max(cursorStart,cursor)..$];
+		cursor = cursorStart = min(cursorStart,cursor);
+	}
+
 	void delChar(){
 		resetState;
-		text.delChar(cursor);
+		if(cursorStart == cursor)
+			text.delChar(cursor);
+		else
+			deleteSelection;
 		resetFilter;
 		checkNativeCompletions;
 	}
 
 	void delBackChar(){
 		resetState;
-		if(cursor == 0 && command.length && editing > 0){
-			command = command[0..editing] ~ command[editing+1..$];
-			moveLeft;
-			return;
+		if(cursorStart == cursor){
+			if(cursor == 0 && command.length && editing > 0){
+				command = command[0..editing] ~ command[editing+1..$];
+				moveLeft;
+				return;
+			}
+			text.delBackChar(cursor);
+		}else{
+			deleteSelection;
 		}
-		text.delBackChar(cursor);
+		cursorStart = cursor;
 		resetFilter;
 		checkNativeCompletions;
 	}
@@ -405,7 +448,9 @@ class CommandBuilder {
 			command = command[0..editing] ~ command[editing+1..$];
 			moveLeft;
 		}
+		auto oldLength = text.length;
 		text.deleteWordLeft(cursor);
+		cursorStart = cursor;
 		resetFilter;
 		checkNativeCompletions;
 	}
@@ -420,7 +465,7 @@ class CommandBuilder {
 	override string toString(){
 		if(commandSelected){
 			if(command.length > 1)
-				return commandSelected.text ~ ' ' ~ reduce!"a ~ ' ' ~ b"("", command[1..$]);
+				return commandSelected.text ~ reduce!"a ~ ' ' ~ b"("", command[1..$]);
 			else
 				return commandSelected.text;
 		}
