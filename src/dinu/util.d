@@ -64,3 +64,14 @@ void log(string text){
 	}
 }
 
+void logExec(string text){
+	log(text);
+	synchronized(logMutex){
+		auto path = options.configPath ~ ".exec";
+		if(path.exists)
+			path.append(text ~ '\n');
+		else
+			std.file.write(path, text ~ '\n');
+	}
+}
+

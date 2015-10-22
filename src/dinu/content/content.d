@@ -17,7 +17,7 @@ import
 	std.file,
 	std.path,
 
-	desktop,
+	ws.x.desktop,
 	dinu.dinu,
 	dinu.xclient,
 	dinu.command;

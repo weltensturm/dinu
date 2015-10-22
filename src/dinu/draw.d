@@ -1,4 +1,4 @@
-module draw;
+module dinu.draw;
 
 import
 	std.string,
@@ -8,7 +8,9 @@ import
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,
+	x11.extensions.Xrender,
 	x11.keysymdef,
+	ws.bindings.xft,
 	dinu.util,
 	dinu.xclient;
 
@@ -223,53 +225,4 @@ class DrawingContext {
 			return XTextWidth(font.xfont, cast(char*)c, cast(int)c.length);
 	}
 
-}
-
-extern(C){
-
-	pragma(lib, "Xft");
-
-	struct XftColor {
-		ulong pixel;
-		XRenderColor color;
-	}
-	struct XftFont {
-		int ascent;
-		int descent;
-		int height;
-		int max_advance_width;
-		FcCharSet* charset;
-		FcPattern* pattern;
-	}
-	struct XRenderColor {
-		ushort   red;
-	    ushort   green;
-	    ushort   blue;
-	    ushort   alpha;
-	}
-
-	struct XftDraw{}
-	struct FcCharSet{}
-	struct FcPattern{}
-	void XftFontClose(Display*, XftFont*);
-	XftDraw *XftDrawCreate (Display*, Drawable, Visual*, Colormap);
-	void XftDrawChange(XftDraw*, Drawable);
-	void XftDrawDestroy(XftDraw*);
-	void XftDrawStringUtf8(XftDraw*, XftColor*, XftFont*, int, int, char*, int);
-	void XftDrawString32(XftDraw*, XftColor*, XftFont*, int, int, dchar*, int);
-	Bool XftDrawSetClipRectangles(XftDraw*, int, int, XRectangle*, int);
-	Bool XftDrawSetClip(XftDraw*, Region);
-	void XftColorFree(Display*, Visual*, Colormap, XftColor*);
-	Bool XftColorAllocName (Display*, Visual*, Colormap, char*, XftColor*);
-	XftFont* XftFontOpenName (Display*, int , char *);
-	void XftTextExtentsUtf8(Display*, XftFont*, char*, int, XGlyphInfo*);
-
-	struct XGlyphInfo {
-	    ushort width;
-	    ushort height;
-	    short x;
-	    short y;
-	    short xOff;
-	    short yOff;
-	}
 }

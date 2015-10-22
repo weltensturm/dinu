@@ -6,8 +6,9 @@
 	"workingDirectory": "bin",
 	"targetType": "executable",
 	"dependencies": {
-		"x11": ">=1.0.1"
+		"ws": "~master"
 	},
 	"libs-posix": ["Xft"],
-	"sourcePaths": ["src"]
+	"sourcePaths": ["src"],
+	"includePaths": ["src"]
 }

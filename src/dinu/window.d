@@ -2,7 +2,7 @@ module dinu.window;
 
 import
 	std.conv,
-	draw,
+	dinu.draw,
 	x11.X,
 	x11.Xlib,
 	x11.Xutil,

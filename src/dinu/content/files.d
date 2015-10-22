@@ -12,7 +12,7 @@ import
 	dinu.content.content,
 	dinu.content.executables,
 	dinu.command,
-	draw;
+	dinu.draw;
 
 
 __gshared:
@@ -48,7 +48,7 @@ class FilesLoader: ChoiceLoader {
 				.expandTilde
 				.buildNormalizedPath
 				.chompPrefix(getcwd ~ '/')
-				.unixEscape;
+				.unixClean;
 			try{
 				if(entry.isDir){
 					if(depth)
@@ -82,7 +82,7 @@ class CommandFile: Command {
 	private this(){home=false;}
 
 	this(string name){
-		this.name = name;
+		this.name = name.unixEscape;
 		type = Type.file;
 		color = options.colorFile;
 		parts = name.split('/');
@@ -96,8 +96,8 @@ class CommandFile: Command {
 
 	override string filterText(){
 		if(home)
-			return "~/" ~ name;
-		return name;
+			return "~/" ~ name ~ "/";
+		return name ~ "/";
 	}
 
 	override size_t score(){
@@ -117,7 +117,7 @@ class CommandFile: Command {
 	}
 
 	override void run(){
-		spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
+		openFile(name);
 	}
 
 }
@@ -136,7 +136,7 @@ class CommandDir: CommandFile {
 	}
 
 	override void run(){
-		spawnCommand(`exo-open %s || xdg-open %s`.format(name,name));
+		openDir(name);
 	}
 
 }

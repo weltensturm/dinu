@@ -17,7 +17,7 @@ import
 	dinu.content.executables,
 	dinu.content.files,
 	dinu.command,
-	draw;
+	dinu.draw;
 
 
 __gshared:
@@ -182,8 +182,10 @@ class CommandHistory: Command {
 	}
 
 	override void run(){
+		auto paramOrig = command.parameter;
 		command.parameter ~= parameter;
 		command.run;
+		command.parameter = paramOrig;
 	}
 
 }

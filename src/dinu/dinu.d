@@ -14,7 +14,7 @@ import
 	dinu.commandBuilder,
 	dinu.xclient,
 	dinu.resultWindow,
-	cli;
+	dinu.cli;
 
 
 __gshared:

@@ -1,4 +1,4 @@
-module cli;
+module dinu.cli;
 
 
 import

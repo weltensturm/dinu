@@ -14,8 +14,8 @@ import
 	dinu.util,
 	dinu.content.content,
 	dinu.command,
-	desktop,
-	draw;
+	ws.x.desktop,
+	dinu.draw;
 
 
 __gshared:
@@ -141,7 +141,16 @@ class CommandDesktop: Command {
 	}
 
 	override void run(){
-		this.spawnCommand(exec.replace("%f", parameter).replace("%F", parameter).replace("%u", parameter).replace("%U", parameter));
+		this.spawnCommand(
+				exec.replace("%f", parameter)
+					.replace("%F", parameter)
+					.replace("%u", parameter)
+					.replace("%U", parameter)
+		);
+	}
+
+	override void spawnCommand(string command, string arguments=""){
+		execute(type, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
 	}
 
 }
