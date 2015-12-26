@@ -1,7 +1,7 @@
 {
 	"name": "dinu",
 	"description": "Launcher, file manager, one-way terminal, IDE",
-	"licence": "MIT",
+	"license": "MIT",
 	"targetFileName": "dinu",
 	"targetPath": "bin",
 	"workingDirectory": "bin",
