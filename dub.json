@@ -1,10 +1,11 @@
 {
 	"name": "dinu",
 	"description": "Launcher, file manager, one-way terminal, IDE",
+	"licence": "MIT",
 	"targetFileName": "dinu",
 	"targetPath": "bin",
 	"workingDirectory": "bin",
-	"targetType": "executable",
+	"targetType": "autodetect",
 	"dependencies": {
 		"ws": "~master"
 	},
