@@ -99,10 +99,10 @@ void execute(Type type, string serialized, string command, string parameter=""){
 			string command = (command.strip ~ ' ' ~ parameter).strip;
 			if(!serialized.length)
 				serialized = command;
-			"running: \"%s\"".format(command).writeln;
+			"running: \"%s\" in %s".format(command, options.configPath).writeln;
 			auto pipes = pipeShell(command);
 			auto pid = pipes.pid.processID;
-			"%s exec %s!%s!%s".format(pid, type, serialized, parameter).logExec;
+			formatExec(pid, type, serialized, parameter).logExec;
 			auto reader = task({
 				foreach(line; pipes.stdout.byLine){
 					if(line.length)

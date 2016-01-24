@@ -8,21 +8,13 @@ import
 	std.algorithm,
 	std.array,
 	std.file,
-	dinu.dinu;
+	dinu.dinu,
+	dinu.command;
 
+public import ws.math.vector;
 
 __gshared:
 
-
-ref T x(T)(ref T[2] a){
-	return a[0];
-}
-alias w = x;
-
-ref T y(T)(ref T[2] a){
-	return a[1];
-}
-alias h = y;
 
 
 string[] bangSplit(string text){
@@ -62,6 +54,10 @@ void log(string text){
 		else
 			std.file.write(path, text ~ '\n');
 	}
+}
+
+string formatExec(long pid, Type type, string serialized, string parameter){
+	return "%s exec %s!%s!%s".format(pid, type, serialized, parameter);
 }
 
 void logExec(string text){
