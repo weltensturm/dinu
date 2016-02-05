@@ -22,6 +22,7 @@ import
 	ws.x.desktop,
 	x11.X,
 	x11.Xlib,
+	x11.extensions.Xinerama,
 	x11.keysymdef;
 
 __gshared:
@@ -41,6 +42,22 @@ double eerp(double current, double target, double speed){
 	return current + spd*dir;
 }
 
+struct Screen {
+	int x, y, w, h;
+}
+
+
+Screen[int] screens(Display* display){
+	int count;
+	auto screenInfo = XineramaQueryScreens(display, &count);
+	Screen[int] res;
+	foreach(screen; screenInfo[0..count])
+		res[screen.screen_number] = Screen(screen.x_org, screen.y_org, screen.width, screen.height);
+	XFree(screenInfo);
+	return res;
+
+}
+
 class XClient: dinu.window.Window {
 
 	dinu.window.Window resultWindow;
@@ -55,15 +72,21 @@ class XClient: dinu.window.Window {
 	Animation windowAnimation;
 
 	this(){
-		super(options.screen, [0, 0], [1,1]);
+		super(0, [0, 0], [1,1]);
 		dc.initfont(options.font);
+		auto screens = screens(display);
+		if(options.screen !in screens){
+			"Screen %s does not exist".format(options.screen).writeln;
+			options.screen = screens.keys[0];
+		}
+		auto screen = screens[options.screen];
 		em1 = dc.font.height*1.3;
 		resize([
-			options.w ? options.w : DisplayWidth(display, screen),
+			options.w ? options.w : screen.w,
 			1.em*(options.lines+1)+0.8.em
 		]);
 		move([
-			options.x,
+			options.x + screen.x,
 			-size.h
 		]);
 		show;

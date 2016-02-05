@@ -7,6 +7,7 @@ import
 	std.file,
 	std.path,
 	std.parallelism,
+	ws.context,
 	dinu.dinu,
 	dinu.util,
 	dinu.content.content,

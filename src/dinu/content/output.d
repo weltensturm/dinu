@@ -10,6 +10,7 @@ import
 	std.regex,
 	std.string,
 	std.stdio,
+	ws.context,
 	dinu.dinu,
 	dinu.util,
 	dinu.xclient,

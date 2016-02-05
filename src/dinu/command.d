@@ -15,6 +15,7 @@ import
 	std.file,
 	std.math,
 	std.regex,
+	ws.context,
 	dinu.util,
 	dinu.xclient,
 	dinu.dinu,
@@ -86,52 +87,8 @@ class Command {
 	}
 
 	void spawnCommand(string command, string arguments=""){
-		execute(type, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
+		options.configPath.execute(type.to!string, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
 	}
 
 }
 
-
-
-void execute(Type type, string serialized, string command, string parameter=""){
-	auto dg = {
-		try{
-			string command = (command.strip ~ ' ' ~ parameter).strip;
-			if(!serialized.length)
-				serialized = command;
-			"running: \"%s\" in %s".format(command, options.configPath).writeln;
-			auto pipes = pipeShell(command);
-			auto pid = pipes.pid.processID;
-			formatExec(pid, type, serialized, parameter).logExec;
-			auto reader = task({
-				foreach(line; pipes.stdout.byLine){
-					if(line.length)
-						"%s stdout %s".format(pid, line).log;
-				}
-			});
-			reader.executeInNewThread;
-			foreach(line; pipes.stderr.byLine){
-				if(line.length)
-					"%s stderr %s".format(pid, line).log;
-			}
-			reader.yieldForce;
-			auto res = pipes.pid.wait;
-			"%s exit %s".format(pid, res).log;
-		}catch(Throwable t)
-			writeln(t);
-	};
-	task(dg).executeInNewThread;
-}
-
-void openFile(string path){
-	openPath(path, Type.file);
-}
-
-void openDir(string path){
-	openPath(path, Type.directory);
-}
-
-void openPath(string path, Type type){
-	auto command = `exo-open "%s" || xdg-open "%s"`.format(path,path);
-	execute(type, path, command);
-}

@@ -7,6 +7,7 @@ import
 	std.file,
 	std.stdio,
 	std.parallelism,
+	ws.context,
 	dinu.dinu,
 	dinu.util,
 	dinu.content.content,
@@ -117,7 +118,7 @@ class CommandFile: Command {
 	}
 
 	override void run(){
-		openFile(name);
+		options.configPath.openFile(name);
 	}
 
 }
@@ -136,7 +137,7 @@ class CommandDir: CommandFile {
 	}
 
 	override void run(){
-		openDir(name);
+		options.configPath.openDir(name);
 	}
 
 }

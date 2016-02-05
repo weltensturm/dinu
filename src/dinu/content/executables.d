@@ -10,6 +10,7 @@ import
 	std.string,
 	std.array,
 	std.stdio,
+	ws.context,
 	dinu.dinu,
 	dinu.util,
 	dinu.content.content,
@@ -85,14 +86,14 @@ class CommandSpecial: CommandExec {
 	override void run(){
 		final switch(name){
 			case "cd":
-				log("%s exec %s!%s!%s".format(0, Type.special, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
+				options.configPath.log("%s exec %s!%s!%s".format(0, Type.special, serialize.replace("!", "\\!"), parameter.replace("!", "\\!")));
 				try{
 					chdir(parameter.expandTilde.unixClean);
 					std.file.write(options.configPath, getcwd);
-					log("%s exit %s".format(0, 0));
+					options.configPath.log("%s exit %s".format(0, 0));
 				}catch(Exception e){
 					writeln(e);
-					log("%s exit %s".format(0, 1));
+					options.configPath.log("%s exit %s".format(0, 1));
 				}
 				break;
 			case "clear":
@@ -150,7 +151,7 @@ class CommandDesktop: Command {
 	}
 
 	override void spawnCommand(string command, string arguments=""){
-		execute(type, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
+		options.configPath.execute(type.to!string, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
 	}
 
 }

@@ -5,11 +5,11 @@
 	"targetFileName": "dinu",
 	"targetPath": "bin",
 	"workingDirectory": "bin",
-	"targetType": "autodetect",
+	"targetType": "executable",
 	"dependencies": {
 		"ws": "~master"
 	},
-	"libs-posix": ["Xft"],
+	"libs-posix": ["Xft", "Xinerama"],
 	"sourcePaths": ["src"],
 	"includePaths": ["src"]
 }

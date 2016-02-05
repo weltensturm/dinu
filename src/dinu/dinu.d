@@ -36,10 +36,10 @@ struct Options {
 	@("-x") int x;
 	@("-y") int y;
 	@("-w") int w;
+	@("-s") int screen = 0;
 	@("-l") int lines = 15;
 	@("-fn") string font = "Monospace-10";
 	@("-c") string configPath = "~/.dinu/default";
-	@("-s") int screen;
 
 	@("-e") string execute;
 
