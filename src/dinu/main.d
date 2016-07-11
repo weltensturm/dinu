@@ -1,20 +1,7 @@
-module dinu.dinu;
+module dinu.main;
 
 
-import
-	core.thread,
-	std.algorithm,
-	std.conv,
-	std.stdio,
-	std.string,
-	std.path,
-	std.file,
-	std.datetime,
-	x11.Xlib,
-	dinu.commandBuilder,
-	dinu.xclient,
-	dinu.resultWindow,
-	dinu.cli;
+import dinu;
 
 
 __gshared:
@@ -44,6 +31,8 @@ struct Options {
 	@("-e") string execute;
 
 	@("-a") double animations = 1;
+
+	@("-f") bool flatman;
 
 	@("-cb") string colorBg = "#252525";
 	@("-ci") string colorInput = "#ffffff";

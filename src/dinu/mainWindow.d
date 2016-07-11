@@ -1,32 +1,14 @@
-module dinu.xclient;
+module dinu.mainWindow;
 
-import
-	std.path,
-	std.math,
-	std.process,
-	std.file,
-	std.string,
-	std.stdio,
-	std.conv,
-	std.datetime,
-	std.algorithm,
-	core.thread,
-	dinu.draw,
-	dinu.cli,
-	dinu.util,
-	dinu.window,
-	dinu.animation,
-	dinu.commandBuilder,
-	dinu.command,
-	dinu.dinu,
-	ws.x.desktop,
-	x11.X,
-	x11.Xlib,
-	x11.extensions.Xinerama,
-	x11.keysymdef;
 
+import dinu;
+ 
+ 
+ 
+import dinuWindow = dinu.window;
+ 
+ 
 __gshared:
-
 
 
 private double em1;
@@ -58,9 +40,9 @@ Screen[int] screens(Display* display){
 
 }
 
-class XClient: dinu.window.Window {
+class XClient: dinuWindow.Window {
 
-	dinu.window.Window resultWindow;
+	dinuWindow.Window resultWindow;
 	int padding;
 	int animationY;
 	bool shouldClose;
@@ -134,7 +116,7 @@ class XClient: dinu.window.Window {
 		dc.rect([sep, pos.y+paddingVert], [size.w/2, size.h-paddingVert*2], options.colorInputBg);
 		// cwd
 		int textY = pos.y+size.h/2-0.5.em;
-		dc.text([pos.x+sep, textY], getcwd, commandBuilder.commandHistory ? options.colorExec : options.colorHint, 1.4);
+		dc.text([pos.x+sep, textY], getcwd.replace("~".expandTilde, "~"), commandBuilder.commandHistory ? options.colorExec : options.colorHint, 1.4);
 		dc.clip([pos.x+size.w/4, pos.y], [size.w/2, size.h]);
 		int textWidth = dc.textWidth(commandBuilder.cursorPart ~ "..");
 		int offset = -max(0, textWidth-size.w/2);
@@ -163,20 +145,20 @@ class XClient: dinu.window.Window {
 
 	void drawOutput(int[2] pos, int[2] size, int sep){
 		dc.rect(pos, size, options.colorOutputBg);
-		auto matches = output.dup;
+		auto output = output.dup;
 		auto selected = commandBuilder.selected < -1 ? -commandBuilder.selected-2 : -1;
 		auto start = cast(size_t)scrollCurrent;
 		if(selectCurrent < -1)
 			dc.rect([pos.x+sep, cast(int)(pos.y+size.h - size.h*(-1-selectCurrent-scrollCurrent)/cast(double)options.lines)], [size.w/2, 1.em], options.colorHintBg);
-		foreach(i, match; matches[start..min($, start+options.lines+1)]){
+		foreach(i, match; output[start..min($, start+options.lines+1)]){
 			int y = cast(int)(pos.y+size.h - size.h*(i+1-(scrollCurrent-start))/cast(double)options.lines);
 			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);
 			match.draw(dc, [pos.x+sep+padding, y], start+i == selected);
 			dc.noclip;
 		}
-		if(matches.length > 15){
-			double scrollbarHeight = size.h/(max(1.0, (cast(long)matches.length-cast(long)14).log2));
-			int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1-scrollCurrent/(max(1.0, matches.length-15))));
+		if(output.length > 15){
+			double scrollbarHeight = size.h/(max(1.0, (cast(long)output.length-cast(long)14).log2));
+			int scrollbarOffset = cast(int)((size.h - scrollbarHeight) * (1-scrollCurrent/(max(1.0, output.length-15))));
 			dc.rect([size.w/4*3-0.2.em, scrollbarOffset], [0.2.em, cast(int)scrollbarHeight], options.colorHintBg);
 		}
 	}
@@ -202,86 +184,47 @@ class XClient: dinu.window.Window {
 		auto length = Xutf8LookupString(xic, ev, buf.ptr, cast(int)buf.length, &key, &status);
 		if(ev.state & ControlMask)
 			switch(key){
-				case XK_r:
-					commandBuilder.commandHistory = true;
-					commandBuilder.resetFilter;
-					return;
-				case XK_q:
-					key = XK_Escape;
-					break;
-				case XK_u:
-					commandBuilder.deleteLeft;
-					return;
-				case XK_BackSpace:
-					commandBuilder.deleteWordLeft;
-					return;
-				case XK_Delete:
-					commandBuilder.deleteWordRight;
-					return;
-				case XK_j:
-					commandBuilder.moveLeft;
-					return;
-				case XK_semicolon:
-					commandBuilder.moveRight;
-					return;
+				case XK_r:			commandBuilder.commandHistory = true; commandBuilder.resetFilter; return;
+				case XK_q:			key = XK_Escape; break;
+				case XK_u:			commandBuilder.deleteLeft; return;
+				case XK_BackSpace:	commandBuilder.deleteWordLeft; return;
+				case XK_Delete:		commandBuilder.deleteWordRight; return;
+				case XK_j:			commandBuilder.moveLeft; return;
+				case XK_semicolon:	commandBuilder.moveRight; return;
 				case XK_V:
-				case XK_v:
-					XConvertSelection(display, clip, utf8, utf8, handle, CurrentTime);
-					return;
-				case XK_a:
-					commandBuilder.selectAll;
-					return;
-				default:
-					break;
+				case XK_v:			XConvertSelection(display, clip, utf8, utf8, handle, CurrentTime); return;
+				case XK_a:			commandBuilder.selectAll; return;
+				default: break;
 			}
 		switch(key){
-			case XK_Escape:
-				close();
-				return;
-			case XK_Delete:
-				commandBuilder.delChar;
-				return;				
-			case XK_BackSpace:
-				commandBuilder.delBackChar;
-				return;
-			case XK_Left:
-				commandBuilder.moveLeft((ev.state & ControlMask) != 0);
-				return;
-			case XK_Right:
-				commandBuilder.moveRight((ev.state & ControlMask) != 0);
-				return;
+			case XK_Escape:			close(); return;
+			case XK_Delete:			commandBuilder.delChar; return;
+			case XK_BackSpace:		commandBuilder.delBackChar; return;
+			case XK_Left:			commandBuilder.moveLeft((ev.state & ControlMask) != 0); return;
+			case XK_Right:			commandBuilder.moveRight((ev.state & ControlMask) != 0); return;
 			case XK_Tab:
-			case XK_Down:
-				commandBuilder.select(commandBuilder.selected+1);
-				return;
+			case XK_Down:			commandBuilder.select(commandBuilder.selected+1); return;
 			case XK_ISO_Left_Tab:
 			case XK_Up:
-				if(!options.lines && commandBuilder.selected == -1){
-					showOutput;
-				}else
-					commandBuilder.select(commandBuilder.selected-1);
-				return;
-			case XK_Page_Up:
-				commandBuilder.select(commandBuilder.selected-options.lines);
-				break;
-			case XK_Page_Down:
-				commandBuilder.select(commandBuilder.selected+options.lines);
-				break;
+									if(!options.lines && commandBuilder.selected == -1){
+										showOutput;
+									}else
+										commandBuilder.select(commandBuilder.selected-1);
+									return;
+			case XK_Page_Up:		commandBuilder.select(commandBuilder.selected-options.lines); break;
+			case XK_Page_Down:		commandBuilder.select(commandBuilder.selected+options.lines); break;
 			case XK_Return:
 			case XK_KP_Enter:
-				commandBuilder.run(!(ev.state & ControlMask));
-				if(ev.state & ShiftMask && !options.lines){
-					showOutput;
-				}
-				if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
-					close();
-				return;
+									commandBuilder.run(!(ev.state & ControlMask));
+									if(ev.state & ShiftMask && !options.lines){
+										showOutput;
+									}
+									if(!(ev.state & ControlMask) && !(ev.state & ShiftMask))
+										close();
+									return;
 			case XK_Shift_L:
-			case XK_Shift_R:
-				commandBuilder.shiftDown = !commandBuilder.shiftDown;
-				break;
-			default:
-				break;
+			case XK_Shift_R:		commandBuilder.shiftDown = !commandBuilder.shiftDown; break;
+			default: break;
 		}
 		if(dc.textWidth(buf[0..length].to!string) > 0){
 			string s = buf[0..length].to!string;

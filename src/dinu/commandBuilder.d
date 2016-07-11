@@ -1,23 +1,7 @@
 module dinu.commandBuilder;
 
-import
-	std.conv,
-	std.uni,
-	std.algorithm,
-	std.file,
-	std.path,
-	std.parallelism,
-	ws.context,
-	dinu.dinu,
-	dinu.util,
-	dinu.content.content,
-	dinu.content.output,
-	dinu.content.executables,
-	dinu.content.files,
-	dinu.content.talkProcess,
-	dinu.content.bashCompletion,
-	dinu.filter,
-	dinu.command;
+
+import dinu;
 
 
 __gshared:
@@ -115,12 +99,13 @@ class CommandBuilder {
 				synchronized(this)
 					history = c ~ history;
 				choiceFilter.add(c);
-			}
-			synchronized(this){
-				if(c.score >= 10000*999)
-					output = c ~ output;
-				else
-					output ~= c;
+			}else{
+				synchronized(this){
+					if(c.score >= 10000*999)
+						output = c ~ output;
+					else
+						output ~= c;
+				}
 			}
 		});
 
@@ -194,7 +179,7 @@ class CommandBuilder {
 		bashCompletions = [];
 		if(command.length > 1){
 			task({
-				l:foreach(c; loadParams(toString)){
+				l:foreach(c; loadBashCompletion(toString)){
 					foreach(e; bashCompletions)
 						if(e.text == c)
 							continue l;
@@ -229,7 +214,7 @@ class CommandBuilder {
 			if(res.length && selected >= -1)
 				commandSelected = res[cast(size_t)(selected<0 ? 0 : selected)].data;
 			else
-				commandSelected = new CommandExec(command[0]);
+				commandSelected = new CommandFile("http://" ~ command[0]);
 		}
 		commandSelected.parameter = "";
 		if(command.length > 1)

@@ -4,4 +4,6 @@
 dub.selections.json
 *.swp
 *.swo
-bin/
+bin/dinu
+*sync-conflict*
+.settings/

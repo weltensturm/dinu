@@ -1,18 +1,6 @@
 module dinu.draw;
 
-import
-	std.string,
-	std.utf,
-	std.algorithm,
-	std.conv,
-	x11.X,
-	x11.Xlib,
-	x11.Xutil,
-	x11.extensions.Xrender,
-	x11.keysymdef,
-	ws.bindings.xft,
-	dinu.util,
-	dinu.xclient;
+import dinu;
 
 
 __gshared:
@@ -198,7 +186,7 @@ class DrawingContext {
 		font.height = font.ascent + font.descent;
 	}
 
-	void map(Window win, int[2] size){
+	void map(x11.X.Window win, int[2] size){
 		XCopyArea(dpy, canvas, win, gc, 0, 0, size.w, size.h, 0, 0);
 	}
 

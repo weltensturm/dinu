@@ -1,26 +1,7 @@
-module dinu.command;
+module dinu.command.command;
 
-import
-	core.sync.mutex,
-	std.conv,
-	std.array,
-	std.string,
-	std.path,
-	std.process,
-	std.parallelism,
-	std.algorithm,
-	std.array,
-	std.stdio,
-	std.datetime,
-	std.file,
-	std.math,
-	std.regex,
-	ws.context,
-	dinu.util,
-	dinu.xclient,
-	dinu.dinu,
-	dinu.commandBuilder,
-	dinu.draw;
+
+import dinu;
 
 
 __gshared:

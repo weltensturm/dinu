@@ -1,21 +1,16 @@
 module dinu.resultWindow;
 
-import
-	std.math,
-	std.algorithm,
-	std.datetime,
-	dinu.dinu,
-	dinu.util,
-	dinu.window,
-	dinu.xclient,
-	dinu.commandBuilder,
-	dinu.command,
-	dinu.filter,
-	dinu.draw;
+
+import dinu;
 
 
+import dinuWindow = dinu.window;
 
-class ResultWindow: Window {
+
+__gshared:
+
+
+class ResultWindow: dinuWindow.Window {
 
 	FuzzyFilter!(Command).Match[] matches;
 
@@ -24,7 +19,7 @@ class ResultWindow: Window {
 	long lastUpdate;
 
 	this(){
-		super(options.screen, [500,500], [1.4.em*15,500]);
+		super(0, [500,500], [1.4.em*15,500]);
 		dc.initfont(options.font);
 	}
 
@@ -41,9 +36,14 @@ class ResultWindow: Window {
 		if(!active)
 			return;
 		auto targetHeight = min(15, matches.length)*1.4.em+0.3.em;
-		if(targetHeight != size.h)
-			resize([size.w, targetHeight]);
-		auto targetX = windowMain.size.w/4;
+		int targetWidth;
+		foreach(match; matches){
+			if(targetWidth < dc.textWidth(match.data.filterText)+16)
+				targetWidth = dc.textWidth(match.data.filterText)+16;
+		}
+		if(targetHeight != size.h || targetWidth != size.w)
+			resize([targetWidth.min(windowMain.size.w/2), targetHeight]);
+		auto targetX = windowMain.pos.x+windowMain.size.w/4;
 		if(!commandBuilder.commandHistory)
 			targetX += dc.textWidth(commandBuilder.finishedPart);
 		if(pos != [targetX, windowMain.size.y+windowMain.pos.y])
@@ -53,8 +53,8 @@ class ResultWindow: Window {
 		auto delta = cur - lastUpdate;
 		lastUpdate = cur;
 
-		auto scrollTarget = min(max(0, cast(long)matches.length-cast(long)options.lines),
-					max(0, commandBuilder.selected-options.lines/2));
+		auto scrollTarget = min(max(0, cast(long)matches.length-15),
+					max(0, commandBuilder.selected-15/2));
 		if(options.animations > 0){
 			scrollCurrent = scrollCurrent.eerp(scrollTarget, delta/150.0/options.animations);
 			selectCurrent = selectCurrent.eerp(commandBuilder.selected, delta/100.0/options.animations);
@@ -73,7 +73,7 @@ class ResultWindow: Window {
 			dc.rect([0,0], [size.w,1.4.em], options.colorHintBg);
 		dc.rect([0,cast(int)((selectCurrent-scrollCurrent)*1.4.em)], [size.w, 1.4.em], options.colorSelected);
 		auto start = cast(size_t)scrollCurrent;
-		foreach(int i, result; matches[start..min($, start+16)]){
+		foreach(int i, result; matches[start.min($-1)..min($, start+16)]){
 			int x = padding;
 			int y = cast(int)(1.4.em*(i-(scrollCurrent-start)));
 			x += result.data.draw(dc, [x, y+0.2.em], start+i == commandBuilder.selected);
