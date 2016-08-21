@@ -76,7 +76,7 @@ class ResultWindow: dinuWindow.Window {
 		foreach(int i, result; matches[start.min($-1)..min($, start+16)]){
 			int x = padding;
 			int y = cast(int)(1.4.em*(i-(scrollCurrent-start)));
-			x += result.data.draw(dc, [x, y+0.2.em], start+i == commandBuilder.selected);
+			x += result.data.draw(dc, [x, y+0.2.em], start+i == commandBuilder.selected, result.positions);
 			auto hint = result.data.hint;
 			if(hint.length){
 				dc.text([max(x, size.w-dc.textWidth(hint)-0.6.em), y+0.2.em], hint, options.colorHint);

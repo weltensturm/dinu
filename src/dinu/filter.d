@@ -2,6 +2,7 @@ module dinu.filter;
 
 import
 	core.thread,
+	std.conv,
 	std.parallelism,
 	std.string,
 	std.path,
@@ -18,6 +19,7 @@ class FuzzyFilter(T) {
 
 	struct Match {
 		long score;
+		int[] positions;
 		T data;
 	}
 
@@ -27,7 +29,6 @@ class FuzzyFilter(T) {
 		Match[] matches;
 		string filter;
 		string narrowQueue;
-		void delegate() waitLoad;
 
 		Thread filterThread;
 		bool restart;
@@ -92,7 +93,9 @@ class FuzzyFilter(T) {
 			if(!filterFunc(p))
 				return;
 			Match match;
-			match.score = p.filterText.cmpFuzzy(filter);
+			auto res = p.filterText.compareFuzzy(filter);
+			match.score = res[0];
+			match.positions = res[1..$];
 			if(match.score > 0){
 				match.score += p.score;
 				match.data = p;
@@ -176,33 +179,82 @@ class FuzzyFilter(T) {
 }
 
 
-long cmpFuzzy(string str, string sub){
-	long scoreMul = 100;
-	long score = scoreMul*10;
-	size_t curIdx;
-	long largestScore;
-	foreach(i, c; str){
-		if(curIdx<sub.length && c.toLower == sub[curIdx].toLower){
-			scoreMul *= (c == sub[curIdx] ? 4 : 3);
-			score += scoreMul;
-			curIdx++;
-		}else{
-			scoreMul = 100;
-		}
-		if(curIdx==sub.length){
-			scoreMul = 100;
-			curIdx = 0;
-			score = scoreMul*10;
-			if(largestScore < score-i+sub.length)
-				largestScore = score-i+sub.length;
+
+int[][] allMatches(string haystack, string needle, int start=0){
+	if(!needle.length)
+		return [[]];
+	int[][] matches = [];
+	foreach(hi, h; haystack[start..$]){
+		if(needle[0].toLower == h.toLower){
+			foreach(m; haystack.allMatches(needle[1..$], start+hi.to!int)){
+				if(!m.length && needle.length == 1 || m.length == needle.length-1)
+					matches ~= ([start+hi.to!int] ~ m);
+			}
 		}
 	}
-	if(!largestScore)
+	return matches;
+}
+
+
+int[] compareFuzzy(string haystack, string needle){
+	if(!needle.length)
+		return [1];
+	auto matches = haystack.allMatches(needle);
+	int best = -1;
+	long bestScore;
+	foreach(i, m; matches){
+		if(m.length < needle.length)
+			continue;
+		auto s = m.score;
+		if(s > bestScore){
+			bestScore = s;
+			best = i.to!int;
+		}
+	}
+	if(best < 0)
+		return [0];
+	return [bestScore.to!int] ~ matches[best];
+}
+
+
+long score(int[] match){
+	if(match.length == 1)
+		return 1;
+	long s = 0;
+	int previous = -1;
+	int offset = 0;
+	foreach(m; match){
+		if(previous == -1){
+			previous = m;
+			offset = m;
+			continue;
+		}
+		if(m == previous+1){
+			s += 1000;
+		}
+		previous = m;
+	}
+	/+
+	if(!s)
 		return 0;
-	if(!sub.startsWith(".") && (str.canFind("/.") || str.startsWith(".")))
-		largestScore -= 5;
-	if(sub == str)
-		largestScore += 10000000;
-	return largestScore;
+	+/
+	return 1.max(s-offset);
+}
+
+
+
+unittest {
+	assert("1".compareFuzzy("1")[0] > 0);
+	assert("122".compareFuzzy("123")[0] <= 0);
+	assert("33453".compareFuzzy("345")[0] > 0);
+	assert(
+		"33453".compareFuzzy("345")[0] ==
+		"23453".compareFuzzy("345")[0]
+	);
+	assert(
+		"32453".compareFuzzy("345")[0] <
+		"23453".compareFuzzy("345")[0]
+	);
+	assert("ls".compareFuzzy("ls")[0] > 0);
 }
 

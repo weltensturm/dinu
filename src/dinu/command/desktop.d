@@ -23,9 +23,9 @@ class CommandDesktop: Command {
 		return [name, exec].bangJoin;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected){
+	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
 		int origX = pos.x;
-		pos.x += super.draw(dc, pos, selected);
+		pos.x += super.draw(dc, pos, selected, positions);
 		return pos.x-origX;
 	}
 

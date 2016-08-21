@@ -136,7 +136,7 @@ class XClient: dinuWindow.Window {
 		if(!commandBuilder.commandSelected){
 			dc.text([textStart, textY], commandBuilder.toString, options.colorInput);
 		}else{
-			auto xoff = textStart+commandBuilder.commandSelected.draw(dc, [textStart, textY], false);
+			auto xoff = textStart+commandBuilder.commandSelected.draw(dc, [textStart, textY], false, []);
 			foreach(param; commandBuilder.command[1..$])
 				xoff += dc.text([xoff, textY], param ~ ' ', options.colorInput);
 		}
@@ -153,7 +153,7 @@ class XClient: dinuWindow.Window {
 		foreach(i, match; output[start..min($, start+options.lines+1)]){
 			int y = cast(int)(pos.y+size.h - size.h*(i+1-(scrollCurrent-start))/cast(double)options.lines);
 			dc.clip([pos.x, pos.y], [size.w/4*3, size.h]);
-			match.draw(dc, [pos.x+sep+padding, y], start+i == selected);
+			match.draw(dc, [pos.x+sep+padding, y], start+i == selected, []);
 			dc.noclip;
 		}
 		if(output.length > 15){
@@ -172,6 +172,7 @@ class XClient: dinuWindow.Window {
 	}
 
 	override void destroy(){
+		commandBuilder.cleanup;
 		windowAnimation = new AnimationExpOut(pos.y, -size.h, (0.1+size.h/4000.0)*options.animations);
 		shouldClose = true;
 		XUngrabKeyboard(display, CurrentTime);

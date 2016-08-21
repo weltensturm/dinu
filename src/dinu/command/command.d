@@ -60,15 +60,28 @@ class Command {
 
 	abstract void run();
 
-	int draw(DrawingContext dc, int[2] pos, bool selected){
+	int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
 		int origX = pos.x;
+
+		foreach(p; positions){
+			if(p < text.length){
+				auto s = dc.textWidth(text[0..p]);
+				dc.rect([pos.x+s, pos.y], [dc.textWidth(text[0..p+1])-s, 1.em], "#555555");
+			}
+		}
+
 		pos.x += dc.text(pos, text, color);
 		pos.x += dc.text(pos, ' ' ~ parameter, options.colorInput);
 		return pos.x-origX;
 	}
 
 	void spawnCommand(string command, string arguments=""){
-		options.configPath.execute(type.to!string, serialize.replace("!", "\\!"), command, arguments.replace("!", "\\!"));
+		options.configPath.execute(
+			type.to!string,
+			serialize.replace("!", "\\!"),
+			command,
+			arguments.replace("!", "\\!")
+		);
 	}
 
 }

@@ -28,11 +28,12 @@ class CommandOutput: Command {
 		return idx*1000;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected){
+	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
 		if(!command.length && pid in running)
 			command = running[pid].text;
+
 		dc.text(pos, command, options.colorHint, 1.8);
-		return super.draw(dc, pos, selected);
+		return super.draw(dc, pos, selected, positions);
 	}
 
 	override void run(){}

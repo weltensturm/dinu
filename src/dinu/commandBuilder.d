@@ -114,6 +114,15 @@ class CommandBuilder {
 		resetFilter;
 	}
 
+	void cleanup(){
+		if(execLoader)
+			execLoader.stop;
+		if(processLoader)
+			processLoader.stop;
+		if(filesLoader)
+			filesLoader.stop;
+	}
+
 	void reset(){
 		command = [""];
 		editing = 0;

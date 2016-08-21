@@ -32,15 +32,17 @@ class FilesLoader: ChoiceLoader {
 			.chomp("/") ~ "/";
 		if(dirCompleted(dir))
 			return;
+		string[] dirs;
 		foreach(i, entry; dir.dirContent){
+			if(!active)
+				return;
 			string path = entry
 				.expandTilde
 				.buildNormalizedPath
 				.unixClean;
 			try{
 				if(entry.isDir){
-					if(depth)
-						loadFiles(path, depth-1);
+					dirs ~= path;
 					add(new CommandDir(path));
 				}else{
 					auto attr = getAttributes(path);
@@ -48,10 +50,13 @@ class FilesLoader: ChoiceLoader {
 						add(new CommandExec(path));
 					add(new CommandFile(path));
 				}
+				Thread.sleep(4.msecs);
 			}catch(Throwable t){
 				writeln(t);
 			}
 		}
+		foreach(subdir; dirs)
+			loadFiles(subdir, 1);
 	}
 
 	void postLoad(string dir, int depth){

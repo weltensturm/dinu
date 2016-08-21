@@ -15,6 +15,10 @@ class CommandDir: CommandFile {
 		parts ~= "";
 	}
 
+	override string filterText(){
+		return super.filterText ~ "/";
+	}
+
 	override size_t score(){
 		return 11;
 	}

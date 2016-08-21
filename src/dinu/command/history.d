@@ -49,14 +49,14 @@ class CommandHistory: Command {
 		return idx*1000;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected){
+	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
 		auto origX = pos.x;
 		if(result != long.max){
 			if(result)
 				dc.rect([pos.x-0.4.em,pos.y], [0.1.em, 1.em], options.colorError);
 		}else
 			dc.rect([pos.x-0.4.em,pos.y], [0.1.em, 1.em], options.colorHint);
-		pos.x += command.draw(dc, pos, selected);
+		pos.x += command.draw(dc, pos, selected, positions);
 		if(parameter.length)
 			pos.x += dc.text(pos, parameter, options.colorOutput);
 		return pos.x-origX;
