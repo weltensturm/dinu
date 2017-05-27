@@ -45,6 +45,8 @@ class OutputLoader: ChoiceLoader {
 			if(idx==0 || !runProgram)
 				break;
 		}
+		scope(exit)
+			p.pid.kill;
 	}
 
 	void loadBackwardsExec(size_t idx){
@@ -56,6 +58,8 @@ class OutputLoader: ChoiceLoader {
 			if(idx==0 || !runProgram)
 				break;
 		}
+		scope(exit)
+			p.pid.kill;
 	}
 
 	void matchLine(string line, size_t idx){
@@ -77,6 +81,8 @@ class OutputLoader: ChoiceLoader {
 				auto pid = to!int(match.captures[1]);
 				if(match.captures[2] == "exec"){
 					auto cmd = match.captures[3].bangSplit;
+					if(!cmd[2].length)
+						continue;
 					auto history = new CommandHistory(idx, pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
 					running[pid] = history;
 					if(pid in results){

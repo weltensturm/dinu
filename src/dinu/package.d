@@ -15,7 +15,7 @@ public import
 	std.stdio,
 	std.file,
 	std.path,
-	std.stream,
+	undead.stream,
 	std.math,
 	std.datetime,
 

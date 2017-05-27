@@ -7,7 +7,8 @@
 	"workingDirectory": "bin",
 	"targetType": "executable",
 	"dependencies": {
-		"ws": "~>1.0.7"
+		"ws": "~>1.0.7",
+		"undead": "~>1.0.6"
 	},
 	"libs-posix": ["Xft", "Xinerama"],
 	"sourcePaths": ["src"],
