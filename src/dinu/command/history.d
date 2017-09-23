@@ -4,69 +4,69 @@ module dinu.command.history;
 import dinu;
 
 
-__gshared:
+shared immutable class CommandHistory: Command {
 
-
-class CommandHistory: Command {
-
-	size_t idx;
-	long result = long.max;
 	Type originalType;
 	Command command;
+	int pid;
 
-	this(size_t idx, int pid, Type originalType, string serialized, string parameter){
-		this.idx = idx;
-		this.parameter = parameter;
-		type = Type.history;
-		switch(originalType){
-			case Type.script:
-				command = new CommandExec(serialized);
-				break;
-			case Type.desktop:
-				command = new CommandDesktop(serialized);
-				break;
-			case Type.file:
-				command = new CommandFile(serialized);
-				break;
-			case Type.directory:
-				command = new CommandDir(serialized);
-				break;
-			case Type.special:
-				command = new CommandSpecial(serialized);
-				break;
-			default:
-				command = new CommandExec(serialized);
-				break;
-		}
-		this.name = command.text;
+	this(int pid, Type originalType, string serialized, string parameter){
+		this.originalType = originalType;
+		this.pid = pid;
+		if(originalType == Type.script)
+			command = new immutable CommandExec(serialized);
+		else if(originalType == Type.desktop)
+			command = new immutable CommandDesktop(serialized);
+		else if(originalType == Type.file)
+			command = new immutable CommandFile(serialized);
+		else if(originalType == Type.directory)
+			command = new immutable CommandDir(serialized);
+		else if(originalType == Type.special)
+			command = new immutable CommandSpecial(serialized);
+		else
+			command = new immutable CommandExec(serialized);
+		super(Type.history, command.text, parameter);
 	}
 
 	override string filterText(){
-		return super.filterText() ~ parameter;
+		return command.filterText() ~ parameter;
+	}
+
+	override string hint(){
+		auto result = running[pid].result;
+		return result == long.max ? "~" : result.to!string; //command.hint;
 	}
 
 	override size_t score(){
-		return idx*1000;
+		return commandBuilder.text.length
+				? (parameter.length == 0 ? 0 : command.score)
+				: command.score*10;
+		//return commandBuilder.text.length ? command.score : 20 + running[pid].occurrences;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
+	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
 		auto origX = pos.x;
-		if(result != long.max){
-			if(result)
-				dc.rect([pos.x-0.4.em,pos.y], [0.1.em, 1.em], options.colorError);
-		}else
-			dc.rect([pos.x-0.4.em,pos.y], [0.1.em, 1.em], options.colorHint);
-		pos.x += command.draw(dc, pos, selected, positions);
+		/+
+		if(auto r = (pid in running)){
+			if(r.result != long.max){
+				if(r.result)
+					draw.setColor(options.colorError);
+					draw.rect([pos.x-0.4.em, pos.y-3], [0.1.em, 1.em]);
+			}else
+				draw.setColor(options.colorHint);
+				draw.rect([pos.x-0.4.em, pos.y-3], [0.1.em, 1.em]);
+		}
+		+/
+		pos.x += command.draw(draw, pos, selected, positions);
 		if(parameter.length)
-			pos.x += dc.text(pos, parameter, options.colorOutput);
+			draw.setColor(options.colorOutput);
+			pos.x += draw.text(pos, parameter);
 		return pos.x-origX;
 	}
 
-	override void run(){
-		auto paramOrig = command.parameter;
-		command.parameter ~= parameter;
-		command.run;
-		command.parameter = paramOrig;
+	override void run(string parameter){
+		command.run(parameter);
 	}
 
 }
+

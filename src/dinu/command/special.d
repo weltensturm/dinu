@@ -7,17 +7,14 @@ import dinu;
 __gshared:
 
 
-class CommandSpecial: CommandExec {
+shared immutable class CommandSpecial: CommandExec {
 
 	this(string name){
-		super(name);
-		this.name = name;
-		type = Type.special;
-		color = options.colorExec;
+		super(Type.special, name, options.colorExec);
 
 	}
 
-	override void run(){
+	override void run(string parameter){
 		final switch(name){
 			case "cd":
 				if(options.flatman){

@@ -4,22 +4,27 @@ module dinu.loader.output;
 import dinu;
 
 
-__gshared:
+shared class CommandResult {
+	long result;
+	size_t occurrences;
+	this(){
+		result = long.max;
+	}
+}
 
 
-CommandHistory[int] running;
-int[int] results;
+shared CommandResult[int] running;
 
 
 class OutputLoader: ChoiceLoader {
 
-	string[] loaded;
+	int[string] loaded;
 
 	override void run(){
 		auto log = options.configPath ~ ".log";
 		while(!log.exists && active && runProgram)
 			core.thread.Thread.sleep(10.msecs);
-		loaded = [];
+		loaded = loaded.init;
 		auto file = new BufferedFile(log);
 		file.seekEnd(0);
 		size_t idx = 10000;
@@ -31,6 +36,7 @@ class OutputLoader: ChoiceLoader {
 				if(!line.length)
 					continue;
 				matchLine(line, idx++);
+				matchLineExec(line, true);
 			}else
 				core.thread.Thread.sleep(5.msecs);
 		}
@@ -42,7 +48,7 @@ class OutputLoader: ChoiceLoader {
 			matchLine(to!string(line), idx--);
 			if(idx<10000-2000)
 				core.thread.Thread.sleep(4.msecs);
-			if(idx==0 || !runProgram)
+			if(idx==0 || !active)
 				break;
 		}
 		scope(exit)
@@ -52,10 +58,10 @@ class OutputLoader: ChoiceLoader {
 	void loadBackwardsExec(size_t idx){
 		auto p = pipeProcess(["tac", options.configPath ~ ".exec"], Redirect.stdout);
 		foreach(line; p.stdout.byLine){
-			matchLineExec(to!string(line), idx--);
+			matchLineExec(to!string(line), false);
 			if(idx<10000-2000)
 				core.thread.Thread.sleep(4.msecs);
-			if(idx==0 || !runProgram)
+			if(idx==0 || !active)
 				break;
 		}
 		scope(exit)
@@ -67,7 +73,7 @@ class OutputLoader: ChoiceLoader {
 			foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
 				auto pid = to!int(match.captures[1]);
 				if((match.captures[2] == "stdout" || match.captures[2] == "stderr") && match.captures[3].length){
-					add(new CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
+					add(new immutable CommandOutput(pid, match.captures[3], idx, match.captures[2]=="stderr"));
 				}
 			}
 		}catch(Exception e){
@@ -75,30 +81,33 @@ class OutputLoader: ChoiceLoader {
 		}
 	}
 
-	void matchLineExec(string line, size_t idx){
+	void matchLineExec(string line, bool forward){
 		try{
 			foreach(match; line.matchAll(`([0-9]+) (\S+)(?: (.*))?`)){
 				auto pid = to!int(match.captures[1]);
 				if(match.captures[2] == "exec"){
 					auto cmd = match.captures[3].bangSplit;
+					/+
 					if(!cmd[2].length)
 						continue;
-					auto history = new CommandHistory(idx, pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
-					running[pid] = history;
-					if(pid in results){
-						history.result = results[pid];
-					}else if(!exists("/proc/%s".format(pid))){
-						history.result = 0;
-					}
-					if(loaded.canFind(cmd[1] ~ cmd[2]))
+					+/
+					if(pid !in running)
+						running[pid] = new shared CommandResult;
+					if(!exists("/proc/%s".format(pid)) && running[pid].result == long.max)
+						running[pid].result = 0;
+					if(cmd[1] ~ cmd[2] in loaded){
+						auto l = loaded[cmd[1].idup ~ cmd[2].idup];
+						running[l].occurrences++;
 						continue;
-					loaded ~= cmd[1].idup ~ cmd[2].idup;
+					}
+					auto history = new immutable CommandHistory(pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);
+					loaded[cmd[1].idup ~ cmd[2].idup] = pid;
+					running[pid].occurrences = 0;
 					add(history);
 				}else if(match.captures[2] == "exit"){
-					if(pid in running)
-						running[pid].result = to!int(match.captures[3]);
-					else
-						results[pid] = to!int(match.captures[3]);
+					if(pid !in running)
+						running[pid] = new shared CommandResult;
+					running[pid].result = to!int(match.captures[3]);
 				}
 			}
 		}catch(Exception e){

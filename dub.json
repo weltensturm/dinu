@@ -7,10 +7,10 @@
 	"workingDirectory": "bin",
 	"targetType": "executable",
 	"dependencies": {
-		"ws": "~>1.0.7",
+		"ws": "~>1.0.11",
 		"undead": "~>1.0.6"
 	},
-	"libs-posix": ["Xft", "Xinerama"],
+	"libs-posix": ["Xft", "Xinerama", "fontconfig", "Xrender"],
 	"sourcePaths": ["src"],
 	"includePaths": ["src"]
 }

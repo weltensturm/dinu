@@ -7,3 +7,5 @@ dub.selections.json
 bin/dinu
 *sync-conflict*
 .settings/
+vgcore.*
+trace.*

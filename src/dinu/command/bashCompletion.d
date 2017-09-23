@@ -7,13 +7,12 @@ import dinu;
 __gshared:
 
 
-class CommandBashCompletion: Command {
+shared immutable class CommandBashCompletion: Command {
 
 	this(string name){
-		super(name);
-		type = Type.bashCompletion;
+		super(Type.bashCompletion, name);
 	}
 
-	override void run(){}
+	override void run(string){}
 
 }

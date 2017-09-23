@@ -21,47 +21,57 @@ class FilesLoader: ChoiceLoader {
 	}
 
 	override void run(){
-		loadFiles(path, depth);
+		loadDir(path);
 	}
 
-	private void loadFiles(string dir, int depth){
+	private void loadDir(string path){
+		auto dirs = [path];
+		for(int i=0; i<dirs.length; i++){
+			if(!active)
+				return;
+			dirs ~= loadFiles(dirs[i], 1);
+		}
+	}
+
+	private string[] loadFiles(string dir, int depth){
 		dir = dir
 			.unixClean
 			.expandTilde
 			.absolutePath
 			.chomp("/") ~ "/";
 		if(dirCompleted(dir))
-			return;
+			return [];
 		string[] dirs;
 		foreach(i, entry; dir.dirContent){
 			if(!active)
-				return;
+				return [];
 			string path = entry
 				.expandTilde
 				.buildNormalizedPath
 				.unixClean;
+			if(path.isSymlink)
+				continue;
 			try{
 				if(entry.isDir){
 					dirs ~= path;
-					add(new CommandDir(path));
+					add(new immutable CommandDir(path));
 				}else{
 					auto attr = getAttributes(path);
 					if(attr & (1 + (1<<3)))
-						add(new CommandExec(path));
-					add(new CommandFile(path));
+						add(new immutable CommandExec(path));
+					add(new immutable CommandFile(path));
 				}
-				Thread.sleep(4.msecs);
+				Thread.sleep(1.msecs);
 			}catch(Throwable t){
 				writeln(t);
 			}
 		}
-		foreach(subdir; dirs)
-			loadFiles(subdir, 1);
+		return dirs;
 	}
 
-	void postLoad(string dir, int depth){
+	void postLoad(string path, int depth){
 		task({
-			loadFiles(dir, depth);
+			loadDir(path);
 		}).executeInNewThread;
 	}
 

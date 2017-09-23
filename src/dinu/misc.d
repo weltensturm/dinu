@@ -22,7 +22,7 @@ string[] dirContent(string dir){
 string[] loadBashCompletion(string command){
 	bool[string] found;
 	writeln(thisExePath);
-	auto p = pipeShell(thisExePath.dirName ~ "/complete.sh '%s'".format(command), Redirect.stdout);
+	auto p = pipeShell("dinu-complete '%s'".format(command), Redirect.stdout);
 	string[] result;
 	foreach(line; p.stdout.byLine){
 		if(line !in found){

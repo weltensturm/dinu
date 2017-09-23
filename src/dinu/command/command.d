@@ -18,24 +18,31 @@ enum Type {
 	output,
 	special,
 	bashCompletion,
-	processInfo
+	processInfo,
+	window
 
 }
 
 
-class Command {
+shared immutable class Command {
 
 	string name;
 	Type type;
-	string color;
+	float[3] color;
+	float[3] colorInput;
 	string parameter;
 
-	protected this(){}
-
-	this(string name){
+	protected this(Type type, string name, string parameter = ""){
+		this.type = type;
 		this.name = name;
-		type = Type.file;
+		this.parameter = parameter;
 		color = options.colorFile;
+		colorInput = options.colorInput;
+	}
+
+	protected this(Type type, string name, float[3] color, string parameter = ""){
+		this(type, name, parameter);
+		this.color = color;
 	}
 
 	string serialize(){
@@ -44,6 +51,10 @@ class Command {
 
 	string text(){
 		return name;
+	}
+
+	string prepFilter(string filter){
+		return filter;
 	}
 
 	string filterText(){
@@ -58,20 +69,24 @@ class Command {
 		return 0;
 	}
 
-	abstract void run();
+	void run(){ run(parameter); };
+	abstract void run(string);
 
-	int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
+	int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
 		int origX = pos.x;
 
 		foreach(p; positions){
 			if(p < text.length){
-				auto s = dc.textWidth(text[0..p]);
-				dc.rect([pos.x+s, pos.y], [dc.textWidth(text[0..p+1])-s, 1.em], "#555555");
+				auto s = draw.width(text[0..p]);
+				draw.setColor([0.333, 0.333, 0.333]);
+				draw.rect([pos.x+s, pos.y-3], [draw.width(text[0..p+1])-s, 1.em]);
 			}
 		}
 
-		pos.x += dc.text(pos, text, color);
-		pos.x += dc.text(pos, ' ' ~ parameter, options.colorInput);
+		draw.setColor(color);
+		pos.x += draw.text(pos, text, 0);
+		draw.setColor(colorInput);
+		pos.x += draw.text(pos, ' ' ~ parameter, 0);
 		return pos.x-origX;
 	}
 

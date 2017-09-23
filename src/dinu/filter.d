@@ -8,161 +8,178 @@ import
 	std.path,
 	std.stdio,
 	std.algorithm,
+	std.range,
 	std.uni,
-	std.datetime;
+	std.datetime,
+	dinu.fuzzyMatch;
 
 
-__gshared:
+shared struct Match(T) {
+	long score;
+	immutable(int)[] positions;
+	immutable(T)[] data;
+}
+
+
+shared class Queue(T) {
+
+	private T[] queue;
+
+	synchronized void opOpAssign(string op)(T object) if(op == "~") {
+		queue ~= object;
+	}
+
+	synchronized size_t length(){
+		return queue.length;
+	}
+
+	synchronized T pop(){
+		assert(queue.length, "Please check queue length, is 0");
+		auto first = queue[0];
+		queue = queue[1..$];
+		return first;
+	}
+
+	synchronized shared(T[]) consume(){
+		auto copy = queue;
+		queue = [];
+		return copy;
+	}
+
+}
 
 
 class FuzzyFilter(T) {
 
-	struct Match {
-		long score;
-		int[] positions;
-		T data;
-	}
+	protected immutable(Match!T)[] matches;
 
-	protected {
-
-		T[] choices;
-		Match[] matches;
-		string filter;
-		string narrowQueue;
-
-		Thread filterThread;
-		bool restart;
-		bool idle = true;
-
-		bool delegate(T) filterFunc;
-
-	}
-
-	this(bool delegate(T) filterFunc){
+	this(shared bool delegate(immutable T) filterFunc){
+		addQueue = new shared Queue!(immutable T);
+		narrowQueue = new shared Queue!string;
 		this.filterFunc = filterFunc;
-		filterThread = new Thread(&filterLoop);
-		filterThread.start;
+		auto worker = task({
+			filterLoop;
+		});
+		worker.executeInNewThread;
 	}
 
 	void reset(string filter=""){
 		filter = filter.expandTilde;
 		restart = true;
 		synchronized(this){
-			narrowQueue = "";
+			narrowQueue.consume;
 			this.filter = filter;
 		}
 	}
 
 	void narrow(string text){
-		synchronized(this)
-			narrowQueue ~= text;
+		narrowQueue ~= text;
 	}
 
-	Match[] res(){
+	immutable(Match!T)[] res(){
 		return matches;
 	}
 
-	void add(T p){
+	void add(immutable T p){
 		synchronized(this)
 			choices ~= p;
-		tryMatch(p);
+		addQueue ~= p;
 	}
 
-	void set(T[] choices){
-		synchronized(this){
+	void set(immutable T[] choices){
+		synchronized(this)
 			this.choices = choices;
-			reset;
-		}
+		reset;
 	}
 
-	void remove(T[] choices){
-		if(!choices.length)
+	void remove(immutable T[] remove){
+		if(!remove.length)
 			return;
-		synchronized(this){
-			auto old = this.choices;
-			this.choices = [];
-			foreach(o; old)
-				if(!choices.canFind(o))
-					this.choices ~= o;
-		}
+		synchronized(this)
+			choices = choices.filter!(a => !remove.canFind(a)).array;
+		reset;
+	}
+
+	void stop(){
+		running = false;
 	}
 
 	protected {
 
-		void tryMatch(T p){
+		shared immutable(T)[] choices;
+		shared Queue!(immutable T) addQueue;
+		shared Queue!string narrowQueue;
+		shared string filter;
+
+		shared bool restart;
+
+		shared bool delegate(immutable T) filterFunc;
+
+		shared bool running = true;
+
+
+		void match(immutable T p){
 			if(!filterFunc(p))
 				return;
-			Match match;
-			auto res = p.filterText.compareFuzzy(filter);
-			match.score = res[0];
-			match.positions = res[1..$];
+			Match!T match;
+			if(p.filterText == filter){
+				match.score = 9999999;
+				match.positions = filter.length.iota.array.to!(int[]).idup;	
+			}else{
+				auto res = p.filterText.compareFuzzy(p.prepFilter(filter));	
+				match.score = res[0];
+				match.positions = res[1..$].idup;
+			}
 			if(match.score > 0){
-				match.score += p.score;
-				match.data = p;
-				synchronized(this){
-					foreach(i, e; matches){
-						if(restart)
-							break;
-						if(e.score <= match.score){
-							if(e.score == match.score && e.data.filterText.icmp(match.data.filterText) < 0)
-								continue;
-							matches = matches[0..i] ~ match ~ matches[i..$];
-							return;
-						}
-					}
-					matches ~= match;
+				if(!filter.startsWith(".") && (p.text.startsWith(".") || p.filterText.canFind("/."))){
+					match.score = 1.min(match.score-100);
 				}
+				match.score += p.score;
+				match.data = [p];
+				foreach(i, e; matches){
+					if(restart)
+						break;
+					if(e.score <= match.score){
+						if(e.score == match.score && e.data[0].filterText.icmp(match.data[0].filterText) < 0)
+							continue;
+						matches = matches[0..i] ~ match ~ matches[i..$];
+						return;
+					}
+				}
+				matches ~= match;
 			}
 		}
 
 		void intReset(string filter){
-			T[] cpy;
-			synchronized(this){
-				if(!idle)
-					throw new Exception("already working");
-				idle = false;
-				this.filter = filter;
-				matches = [];
-				cpy = choices.dup;
-			}
-			foreach(m; cpy){
-				tryMatch(m);
+			this.filter = filter;
+			matches = [];
+			foreach(m; choices){
+				match(m);
 				if(restart)
 					break;
 			}
-			synchronized(this)
-				idle = true;
 		}
 
 		void intNarrow(string filter){
-			Match[] cpy;
-			synchronized(this){
-				if(!idle)
-					throw new Exception("already working");
-				idle = false;
-				this.filter = filter;
-				cpy = matches;
-				matches = [];
-			}
+			this.filter = filter;
+			auto cpy = matches;
+			matches = [];
 			foreach(m; cpy){
-				tryMatch(m.data);
+				match(m.data[0]);
 				if(restart)
 					break;
 			}
-			synchronized(this)
-				idle = true;
 		}
 
 		void filterLoop(){
-			filterThread.isDaemon = true;
 			try{
-				while(true){
+				while(running){
 					if(narrowQueue.length){
-						synchronized(this){
-							filter ~= narrowQueue;
-							narrowQueue = "";
-						}
+						filter ~= narrowQueue.consume.join("");
 						intNarrow(filter);
+					}else if(addQueue.length){
+						foreach(m; addQueue.consume)
+							match(m);
 					}else if(restart){
 						restart = false;
 						intReset(filter);
@@ -177,84 +194,3 @@ class FuzzyFilter(T) {
 	}
 
 }
-
-
-
-int[][] allMatches(string haystack, string needle, int start=0){
-	if(!needle.length)
-		return [[]];
-	int[][] matches = [];
-	foreach(hi, h; haystack[start..$]){
-		if(needle[0].toLower == h.toLower){
-			foreach(m; haystack.allMatches(needle[1..$], start+hi.to!int)){
-				if(!m.length && needle.length == 1 || m.length == needle.length-1)
-					matches ~= ([start+hi.to!int] ~ m);
-			}
-		}
-	}
-	return matches;
-}
-
-
-int[] compareFuzzy(string haystack, string needle){
-	if(!needle.length)
-		return [1];
-	auto matches = haystack.allMatches(needle);
-	int best = -1;
-	long bestScore;
-	foreach(i, m; matches){
-		if(m.length < needle.length)
-			continue;
-		auto s = m.score;
-		if(s > bestScore){
-			bestScore = s;
-			best = i.to!int;
-		}
-	}
-	if(best < 0)
-		return [0];
-	return [bestScore.to!int] ~ matches[best];
-}
-
-
-long score(int[] match){
-	if(match.length == 1)
-		return 1;
-	long s = 0;
-	int previous = -1;
-	int offset = 0;
-	foreach(m; match){
-		if(previous == -1){
-			previous = m;
-			offset = m;
-			continue;
-		}
-		if(m == previous+1){
-			s += 1000;
-		}
-		previous = m;
-	}
-	/+
-	if(!s)
-		return 0;
-	+/
-	return 1.max(s-offset);
-}
-
-
-
-unittest {
-	assert("1".compareFuzzy("1")[0] > 0);
-	assert("122".compareFuzzy("123")[0] <= 0);
-	assert("33453".compareFuzzy("345")[0] > 0);
-	assert(
-		"33453".compareFuzzy("345")[0] ==
-		"23453".compareFuzzy("345")[0]
-	);
-	assert(
-		"32453".compareFuzzy("345")[0] <
-		"23453".compareFuzzy("345")[0]
-	);
-	assert("ls".compareFuzzy("ls")[0] > 0);
-}
-

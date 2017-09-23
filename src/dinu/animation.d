@@ -4,7 +4,8 @@ module dinu.animation;
 import
 	std.math,
 	std.algorithm,
-	std.datetime;
+	std.datetime,
+	ws.time;
 
 
 class Animation {
@@ -15,7 +16,7 @@ class Animation {
 	this(double start, double end, double duration){
 		this.start = start;
 		this.end = end;
-		this.timeStart = Clock.currSystemTick.msecs/1000.0;
+		this.timeStart = now;
 		this.duration = duration;
 	}
 	abstract double func(double completion);
@@ -27,7 +28,7 @@ class Animation {
 		return timeStart+duration < timeCurrent;
 	}
 	double timeCurrent(){
-		return Clock.currSystemTick.msecs/1000.0;
+		return now;
 	}
 }
 

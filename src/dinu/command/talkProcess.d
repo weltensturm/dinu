@@ -7,16 +7,15 @@ import dinu;
 __gshared:
 
 
-class CommandTalkProcess: Command {
+shared immutable class CommandTalkProcess: Command {
 
 	string command;
 	size_t pid;
 
 	this(size_t pid, string command){
-		super("@%s".format(pid));
+		super(Type.processInfo, "@%s".format(pid));
 		this.pid = pid;
 		this.command = command;
-		type = Type.processInfo;
 	}
 
 	override size_t score(){
@@ -31,7 +30,7 @@ class CommandTalkProcess: Command {
 		return command;
 	}
 
-	override void run(){
+	override void run(string parameter){
 		std.file.write("/proc/%s/fd/0".format(pid), (parameter ~ '\n'));
 	}
 

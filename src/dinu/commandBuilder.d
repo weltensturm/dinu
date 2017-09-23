@@ -7,26 +7,32 @@ import dinu;
 __gshared:
 
 
-FuzzyFilter!Command choiceFilter;
-Command[] output;
+immutable(Command)[] output;
 
-bool isText(char c){
+
+unittest {
+	string text = "€äüö";
+	assert(text.to!dstring == text.toUTF32);
+}
+
+
+bool isText(dchar c){
 	return !c.isWhite && c != '/';
 }
 
-void delChar(ref string text, size_t cursor){
+void delChar(ref dstring text, size_t cursor){
 	if(cursor < text.length)
 		text = text[0..cursor] ~ text[cursor+1..$];
 }
 
-void delBackChar(ref string text, ref size_t cursor){
+void delBackChar(ref dstring text, ref size_t cursor){
 	if(cursor){
 		text = text[0..cursor-1] ~ text[cursor..$];
 		cursor--;
 	}
 }
 
-void deleteWordLeft(ref string text, ref size_t cursor){
+void deleteWordLeft(ref dstring text, ref size_t cursor){
 	if(!text.length || !cursor)
 		return;
 	text.delBackChar(cursor);
@@ -39,7 +45,7 @@ void deleteWordLeft(ref string text, ref size_t cursor){
 	}
 }
 
-void deleteWordRight(ref string text, size_t cursor){
+void deleteWordRight(ref dstring text, size_t cursor){
 	text.delChar(cursor);
 	if(cursor >= text.length)
 		return;
@@ -53,39 +59,39 @@ void deleteWordRight(ref string text, size_t cursor){
 
 class CommandBuilder {
 
-	string[] command;
+	FuzzyFilter!Command choiceFilter;
+
+	dstring[] command;
 	size_t editing;
 	size_t cursorStart;
 	bool shiftDown;
 	size_t cursor;
 
-	string filterText;
+	dstring filterText;
 
-	Command commandSelected;
+	immutable(Command)[] commandSelected;
 	int logIdx=1;
-	bool commandHistory;
 	string[] scannedDirs;
-	Command[] bashCompletions;
+	immutable(Command)[] bashCompletions;
 	long selected;
 
 	OutputLoader outputLoader;
 	ExecutablesLoader execLoader;
 	TalkProcessLoader processLoader;
 	FilesLoader filesLoader;
+	WindowsLoader windowsLoader;
 
-	Command[] history;
+	immutable(Command)[] history;
 
 	this(){
 
 		choiceFilter = new FuzzyFilter!Command((c){
 			if(toString.length && toString[0] == '@' && editing == 0){
 				return c.type == Type.processInfo;
-			}else if(choiceFilter && commandHistory){
-				return c.type == Type.history;
-			}else if(!bashCompletions.length && toString.length){
+			}else if(!bashCompletions.length){
 				auto filter = [Type.file, Type.directory];
 				if(editing == 0)
-					filter ~= [Type.script, Type.desktop, Type.special];
+					filter ~= [Type.script, Type.desktop, Type.special, Type.history, Type.window];
 				return filter.canFind(c.type);
 			}else if(bashCompletions.length){
 				return c.type == Type.bashCompletion;
@@ -114,6 +120,10 @@ class CommandBuilder {
 		resetFilter;
 	}
 
+	immutable(Match!Command)[] results(){
+		return choiceFilter.res;
+	}
+
 	void cleanup(){
 		if(execLoader)
 			execLoader.stop;
@@ -123,6 +133,13 @@ class CommandBuilder {
 			filesLoader.stop;
 	}
 
+	void destroy(){
+		cleanup;
+		outputLoader.stop;
+		windowsLoader.stop;
+		choiceFilter.stop;
+	}
+
 	void reset(){
 		command = [""];
 		editing = 0;
@@ -130,19 +147,18 @@ class CommandBuilder {
 		cursorStart = 0;
 		filterText = "";
 		commandSelected = null;
-		commandHistory = false;
 		choiceFilter.reset("");
 	}
 
 	void resetFilter(){
-		choiceFilter.reset(text);
+		choiceFilter.reset(text.to!string);
 		selected = -1;
 	}
 
 	void resetChoices(){
 		bashCompletions = [];
 		synchronized(this)
-			choiceFilter.set(history.dup);
+			choiceFilter.set(history.idup);
 
 		if(execLoader)
 			execLoader.stop;
@@ -170,14 +186,18 @@ class CommandBuilder {
 			choiceFilter.add(c);
 		});
 
-		choiceFilter.reset(text);
+		if(windowsLoader)
+			windowsLoader.stop;
+		windowsLoader = new WindowsLoader;
+		windowsLoader.each(&choiceFilter.add);
+
+		choiceFilter.reset(text.to!string);
 	}
 
 	void resetState(bool force=false){
 		if(!force && editing == 0)
 			commandSelected = null;
 		if(force || editing != 0 || !text.length){
-			commandHistory = false;
 			filterText = "";
 		}
 	}
@@ -192,7 +212,7 @@ class CommandBuilder {
 					foreach(e; bashCompletions)
 						if(e.text == c)
 							continue l;
-					auto completion =  new CommandBashCompletion(c);
+					auto completion =  new immutable CommandBashCompletion(c);
 					bashCompletions ~= completion;
 					choiceFilter.add(completion);
 					resetFilter;
@@ -202,11 +222,13 @@ class CommandBuilder {
 	}
 
 	string finishedPart(){
-		return reduce!"a ~ ' ' ~ b"("", command[0..editing]);
+		return command[0..editing]
+				.fold!"a ~ ' ' ~ b"(""d)
+				.to!string;
 	}
 
 	string cursorPart(){
-		return finishedPart ~ text[0..cursor];
+		return finishedPart ~ text[0..cursor].to!string;
 	}
 
 	void clearOutput(){
@@ -216,23 +238,26 @@ class CommandBuilder {
 	}
 
 	void run(bool r=true){
+		/+
 		if(!command[0].length && !commandHistory)
 			return;
+		+/
 		if(!commandSelected){
 			auto res = choiceFilter.res;
 			if(res.length && selected >= -1)
 				commandSelected = res[cast(size_t)(selected<0 ? 0 : selected)].data;
+			/+
 			else
-				commandSelected = new CommandFile("http://" ~ command[0]);
+				commandSelected = new immutable CommandFile("http://" ~ command[0].to!string);
+			+/
 		}
-		commandSelected.parameter = "";
+		auto params = "";
 		if(command.length > 1)
-			commandSelected.parameter = command[1..$].reduce!"a ~ ' ' ~ b";
-		commandSelected.run;
+			params = command[1..$].reduce!"a ~ ' ' ~ b".to!string;
+		commandSelected[0].run(params);
 		if(r){
 			deleteLeft;
-		}else
-			commandSelected.parameter = "";
+		}
 	}
 
 	// Choice selection
@@ -245,7 +270,7 @@ class CommandBuilder {
 				cursor = text.length;
 				cursorStart = cursor;
 				filterText = "";
-				if(editing == 0 || commandHistory)
+				if(editing == 0)
 					commandSelected = null;
 			}
 			this.selected = -1;
@@ -260,30 +285,22 @@ class CommandBuilder {
 		if(!filterText.length)
 			filterText = text ~ ' ';
 		auto res = choiceFilter.res;
-		if(this.selected < selected){
-			if(!res.length && !commandHistory){
-				commandHistory = true;
-				resetFilter;
-				return;
-			}
-		}
-		selected = selected.min(res.length-1);
-		auto sel = res[cast(size_t)selected].data;
-		if(editing == 0 || commandHistory){
+		selected = selected.min(res.length-1).max(0);
+		auto sel = res[cast(size_t)selected].data[0];
+		if(editing == 0){
 			if(sel.type == Type.history)
-				commandSelected = (cast(CommandHistory)sel).command;
+				commandSelected = [(cast(CommandHistory)sel).command];
 			else
-				commandSelected = sel;
-			if(commandHistory){
-				command = [commandSelected.text];
-				if(sel.parameter.length)
-					command ~= sel.parameter;
-				editing = command.length-1;
+				commandSelected = [sel];
+			if(sel.parameter.length){
+				command = [commandSelected[0].text.to!dstring];
+				command ~= sel.parameter.to!dstring;
+				editing = 0;
 			}else{
-				command[0] = commandSelected.text;
+				command[0] = commandSelected[0].text.to!dstring;
 			}
 		}else{
-			text = sel.text;
+			text = sel.text.to!dstring;
 		}
 		cursor = text.length;
 		cursorStart = cursor;
@@ -296,9 +313,9 @@ class CommandBuilder {
 			filterText = text ~ ' ';
 		auto c = output[cast(size_t)selected];
 		if(c.parameter.length)
-			text = c.parameter;
+			text = c.parameter.to!dstring;
 		else
-			text = '\'' ~ c.text ~ '\'';
+			text = ('\'' ~ c.text ~ '\'').to!dstring;
 		cursor = text.length;
 		cursorStart = cursor;
 		this.selected = -selected-2;
@@ -306,7 +323,7 @@ class CommandBuilder {
 
 	// Text functions
 
-	ref string text(){
+	ref dstring text(){
 		return command[editing];
 	}
 
@@ -317,7 +334,6 @@ class CommandBuilder {
 
 	void moveLeft(bool word=false){
 		if(editing && cursor == 0){
-			commandHistory = false;
 			editing--;
 			cursor = command[editing].length;
 			cursorStart = cursor;
@@ -341,7 +357,6 @@ class CommandBuilder {
 			cursorStart = 0;
 			selected = -1;
 			resetFilter;
-			commandHistory = false;
 		}else if(!word)
 			cursor = min(cursor+1, text.length);
 		if(!shiftDown)
@@ -350,7 +365,7 @@ class CommandBuilder {
 
 	// Text altering
 
-	void insert(string s){
+	void insert(dstring s){
 		if(cursorStart != cursor)
 			deleteSelection;
 		if(cursor == text.length && s == " " && (cursor<2 || text[cursor-2] != '\\')){
@@ -358,9 +373,11 @@ class CommandBuilder {
 				auto res = choiceFilter.res;
 				if(res.length && selected >= -1)
 					commandSelected = res[cast(size_t)(selected<0 ? 0 : selected)].data;
-				else
-					commandSelected = new CommandExec(command[0]);
-				text = commandSelected.text;
+				else {
+					auto c = new immutable CommandExec(command[0].to!string);
+					commandSelected = [c];
+				}
+				text = commandSelected[0].text.to!dstring;
 			}
 			resetState(true);
 			command ~= "";
@@ -380,7 +397,7 @@ class CommandBuilder {
 		text = text[0..cursor] ~ s ~ text[cursor..$];
 		cursor += s.length;
 		cursorStart = cursor;
-		choiceFilter.narrow(s);
+		choiceFilter.narrow(s.to!string);
 
 		if(filterText.length){
 			filterText = "";
@@ -391,7 +408,7 @@ class CommandBuilder {
 		if(s.endsWith("-", "="))
 			checkNativeCompletions;
 
-		auto dir = text.expandTilde.buildNormalizedPath.unixClean;
+		auto dir = text.to!string.expandTilde.buildNormalizedPath.unixClean;
 		if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
 			filesLoader.postLoad(dir, 0);
 		}
@@ -460,12 +477,12 @@ class CommandBuilder {
 	override string toString(){
 		if(commandSelected){
 			if(command.length > 1)
-				return commandSelected.text ~ reduce!"a ~ ' ' ~ b"("", command[1..$]);
+				return commandSelected[0].text ~ command[1..$].fold!"a ~ ' ' ~ b"(""d).to!string;
 			else
-				return commandSelected.text;
+				return commandSelected[0].text;
 		}
 		if(command.length)
-			return command.reduce!"a ~ ' ' ~ b";
+			return command.fold!"a ~ ' ' ~ b".to!string;
 		return "";
 	}
 

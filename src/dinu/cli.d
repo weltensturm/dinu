@@ -4,36 +4,65 @@ module dinu.cli;
 import
 	std.conv,
 	std.stdio,
-	std.string;
+	std.string,
+	dinu.draw;
 
 
 
 void fill(T)(ref T object, string[] args){
-	try{
-		foreach(member; __traits(allMembers, T)) {
-			foreach(attr; __traits(getAttributes, mixin("object."~member))){
-				foreach(i, arg; args){
-					if(arg[0] == '-' && arg == attr){
-						static if(is(typeof(mixin("object."~member)) == bool)){
-							mixin("object." ~ member ~ " = !object." ~ member ~ ";");
-							continue;
-						}else{
-							mixin("object." ~ member ~ " = to!(typeof(T." ~ member ~ "))(args[i+1]);");
-							continue;
-						}
-					}
-				}
+	void delegate(string)[string] setters;
+	void delegate()[string] settersBool;
+	foreach(member; __traits(allMembers, T)) {
+		foreach(attr; __traits(getAttributes, mixin("object."~member))){
+			static if(is(typeof(mixin("object."~member)) == bool)){
+				settersBool[attr] = (){ mixin("object." ~ member ~ " = !object." ~ member ~ ";"); };
+				if(member != "-" ~ attr)
+					settersBool["--" ~ member] = settersBool[attr];
+			}else{
+				static if(is(typeof(mixin("object."~member)) == float[3]))
+					setters[attr] = (string s){ mixin("object." ~ member ~ " = s.color;"); };
+				else
+					setters[attr] = (string s){ mixin("object." ~ member ~ " = s.to!(typeof(T." ~ member ~ "));"); };
+				if(member != "-" ~ attr)
+					setters["--" ~ member] = setters[attr];
 			}
 		}
-	}catch(Throwable t){
+	}
+	void delegate(string) nextSetter;
+	string nextParamName;
+	try {
+		foreach(arg; args[1..$]){
+			try {
+				if(nextSetter){
+					nextSetter(arg);
+					nextSetter = null;
+				}else if(arg in settersBool){
+					settersBool[arg]();
+				}else if(arg in setters){
+					nextSetter = setters[arg];
+					nextParamName = arg;
+				}else{
+					throw new Exception ("Unknown argument");
+				}
+			}catch(Exception e){
+				throw new Exception("Error in \"" ~ (nextSetter ? nextParamName ~ " " ~ arg : arg) ~ "\": " ~ e.msg);
+			}
+		}
+		if(nextSetter)
+			throw new Exception("Missing parameter to argument \"" ~ nextParamName ~ "\"");
+	}catch(Throwable e){
 		usage(object);
-		throw t;
+		throw e;
 	}
 }
 
 void usage(T)(T object){
 	writeln("options: ");
 	foreach(member; __traits(allMembers, T))
-		foreach(attr; __traits(getAttributes, mixin("object."~member)))
-			writeln("\t%s: %s %s".format(attr, mixin("typeof(object." ~ member ~ ").stringof"), member));
+		foreach(attr; __traits(getAttributes, mixin("object."~member))){
+			if(attr == "-" ~ member)
+				writeln("\t%s: %s".format(attr, mixin("typeof(object." ~ member ~ ").stringof")));
+			else
+				writeln("\t%s --%s: %s".format(attr, member, mixin("typeof(object." ~ member ~ ").stringof")));
+		}
 }

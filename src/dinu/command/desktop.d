@@ -7,25 +7,23 @@ import dinu;
 __gshared:
 
 
-class CommandDesktop: Command {
+shared immutable class CommandDesktop: Command {
 
 	string exec;
 
 	this(string args){
 		auto split = args.bangSplit;
-		name = split[0];
+		super(Type.desktop, split[0], options.colorDesktop);
 		exec = split[1];
-		color = options.colorDesktop;
-		type = Type.desktop;
 	}
 
 	override string serialize(){
 		return [name, exec].bangJoin;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
+	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
 		int origX = pos.x;
-		pos.x += super.draw(dc, pos, selected, positions);
+		pos.x += super.draw(draw, pos, selected, positions);
 		return pos.x-origX;
 	}
 
@@ -34,14 +32,14 @@ class CommandDesktop: Command {
 	}
 
 	override size_t score(){
-		return 7;
+		return 11;
 	}
 
 	override string filterText(){
 		return name ~ exec;
 	}
 
-	override void run(){
+	override void run(string parameter){
 		this.spawnCommand(
 				exec.replace("%f", parameter)
 					.replace("%F", parameter)

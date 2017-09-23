@@ -7,12 +7,10 @@ import dinu;
 __gshared:
 
 
-class CommandDir: CommandFile {
+shared immutable class CommandDir: CommandFile {
 
 	this(string name){
-		type = Type.directory;
-		super(name);
-		parts ~= "";
+		super(Type.directory, name, true);
 	}
 
 	override string filterText(){
@@ -23,7 +21,7 @@ class CommandDir: CommandFile {
 		return 11;
 	}
 
-	override void run(){
+	override void run(string){
 		options.configPath.openDir(name);
 	}
 

@@ -4,62 +4,85 @@ module dinu.command.file;
 import dinu;
 
 
-__gshared:
+string chompAll(string source, string what){
+	while(source.chomp(what) != source)
+		source = source.chomp(what);
+	return source;
+}
 
 
-class CommandFile: Command {
+shared immutable class CommandFile: Command {
 
-	immutable bool home;
+	bool home;
+	string[] parts;
 
-	private this(){home=false;}
+	private this(){
+		super(Type.file, "");
+		parts = [];
+		home = false;
+	}
 
 	this(string name){
-		this.name = name.unixEscape;
-		type = Type.file;
-		color = options.colorFile;
-		parts = name.chompPrefix(getcwd ~ "/").split('/');
+		this(Type.file, name);
+	}
+
+	this(Type type, string name, bool isDir=false){
+		super(type, name.unixEscape, options.colorFile);
+		if(isDir)
+			parts = (name.chompPrefix(getcwd ~ "/") ~ "/").split('/');
+		else
+			parts = name.chompPrefix(getcwd ~ "/").split('/');
 		home = (
 			name.chompPrefix("~".expandTilde) != name
 			|| !name.startsWith("/") && getcwd == "~".expandTilde
 		);
 	}
 
-	string[] parts;
-
 	override string text(){
 		return parts.join("/");
 	}
 
-	override string filterText(){
-		return name;
+	override string prepFilter(string filter){
+		if(!filter.length)
+			return "";
+		auto slashes = filter.length - filter.chompAll("/").length;
+		if(filter.startsWith(".."))
+			return filter.expandTilde.absolutePath.buildNormalizedPath ~ "/".replicate(slashes);
+		else
+			return filter.expandTilde.buildNormalizedPath ~ "/".replicate(slashes);
 	}
 
 	override size_t score(){
 		return 10;
 	}
 
-	override int draw(DrawingContext dc, int[2] pos, bool selected, int[] positions){
-		foreach(p; positions){
-			p -= (filterText.length - text.length);
+	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+		foreach(hit; positions){
+			auto p = hit - (filterText.length - text.length);
 			if(p < text.length){
-				auto s = dc.textWidth(text[0..p]);
-				dc.rect([pos.x+s, pos.y], [dc.textWidth(text[0..p+1])-s, 1.em], "#555555");
-				//dc.rect([pos.x+s, pos.y+1.em], [dc.textWidth(text[0..p+1])-s, 1], "#999999");
+				auto s = draw.width(text[0..p]);
+				draw.setColor([0.333, 0.333, 0.333]);
+				draw.rect([pos.x+s, pos.y-3], [draw.width(text[0..p+1])-s, 1.em]);
+				//draw.rect([pos.x+s, pos.y+1.em], [draw.width(text[0..p+1])-s, 1], "#999999");
 			}
 		}
 
 		int advance = 0;
 		foreach(i, part; parts){
 			if(i+1 < parts.length){
-				advance += dc.text([pos.x+advance, pos.y], part, options.colorDir);
-				advance += dc.text([pos.x+advance, pos.y], "/", options.colorOutput);
-			}else
-				advance += dc.text([pos.x+advance, pos.y], part, options.colorFile);
+				draw.setColor(options.colorDir);
+				advance += draw.text([pos.x+advance, pos.y], part, 0);
+				draw.setColor(options.colorOutput);
+				advance += draw.text([pos.x+advance, pos.y], "/", 0);
+			}else{
+				draw.setColor(options.colorFile);
+				advance += draw.text([pos.x+advance, pos.y], part, 0);
+			}
 		}
 		return advance;
 	}
 
-	override void run(){
+	override void run(string){
 		options.configPath.openFile(name);
 	}
 

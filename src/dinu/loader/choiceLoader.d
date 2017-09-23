@@ -10,8 +10,8 @@ __gshared:
 class ChoiceLoader {
 
 	protected {
-		Command[] loaded;
-		void delegate(Command) dg;
+		immutable(Command)[] loaded;
+		void delegate(immutable Command) dg;
 		bool active = true;
 	}
 
@@ -24,7 +24,7 @@ class ChoiceLoader {
 		}).executeInNewThread;
 	}
 
-	void each(void delegate(Command) dg){
+	void each(void delegate(immutable Command) dg){
 		synchronized(this){
 			if(!active)
 				return;
@@ -34,14 +34,14 @@ class ChoiceLoader {
 		}
 	}
 
-	void eachComplete(void delegate(Command) dg){
+	void eachComplete(void delegate(immutable Command) dg){
 		synchronized(this){
 			foreach(c; loaded)
 				dg(c);
 		}
 	}
 
-	void add(Command c){
+	void add(immutable Command c){
 		synchronized(this){
 			if(!active)
 				return;
