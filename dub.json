@@ -10,7 +10,6 @@
 		"ws": "~>1.0.11",
 		"undead": "~>1.0.6"
 	},
-	"libs-posix": ["Xft", "Xinerama", "fontconfig", "Xrender"],
 	"sourcePaths": ["src"],
 	"includePaths": ["src"]
 }

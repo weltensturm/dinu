@@ -36,6 +36,18 @@ Screen[int] screens(Display* display){
 
 }
 
+
+auto mapKeyToChar(ws.wm.Window window, XKeyEvent* e, void delegate(dchar) cb){
+	char[25] str;
+	KeySym ks;
+	Status st;
+	size_t l = Xutf8LookupString(window.inputContext, e, str.ptr, 25, &ks, &st);
+	foreach(dchar c; str[0..l])
+		if(!c.isControl)
+			cb(c);
+}
+
+
 class WindowMain: ws.wm.Window {
 
 	ws.wm.Window resultWindow;
@@ -72,6 +84,10 @@ class WindowMain: ws.wm.Window {
 		padding = 0.4.em;
 		lastUpdate = (now*1000).lround;
 		windowAnimation = new AnimationExpIn(pos.y, 0, (0.1+size.h/4000.0)*options.animationMove);
+		wm.on([
+			KeyPress: (XEvent* e){ keyboard(cast(Keyboard.key)XLookupKeysym(&e.xkey,0), true); this.mapKeyToChar(&e.xkey, &keyboard); },
+			KeyRelease: (XEvent* e) => keyboard(cast(Keyboard.key)XLookupKeysym(&e.xkey,0), false)
+		]);
 	}
 
 	void update(){
@@ -208,7 +224,7 @@ class WindowMain: ws.wm.Window {
 
 	bool[Keyboard.key] keys;
 
-	override void onKeyboard(Keyboard.key key, bool pressed){
+	void keyboard(Keyboard.key key, bool pressed){
 		keys[key] = pressed;
 		if(!pressed)
 			return;
@@ -260,7 +276,7 @@ class WindowMain: ws.wm.Window {
 		onDraw;
 	}
 
-	override void onKeyboard(dchar key){
+	void keyboard(dchar key){
 		commandBuilder.insert(key.to!dstring);
 		onDraw;
 	}
