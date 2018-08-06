@@ -21,7 +21,7 @@ shared immutable class CommandDesktop: Command {
 		return [name, exec].bangJoin;
 	}
 
-	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+	override int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
 		int origX = pos.x;
 		pos.x += super.draw(draw, pos, selected, positions);
 		return pos.x-origX;

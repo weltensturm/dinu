@@ -97,7 +97,7 @@ class OutputLoader: ChoiceLoader {
 						running[pid].result = 0;
 					if(cmd[1] ~ cmd[2] in loaded){
 						auto l = loaded[cmd[1].idup ~ cmd[2].idup];
-						running[l].occurrences++;
+						running[l].occurrences.atomicOp!"+="(1);
 						continue;
 					}
 					auto history = new immutable CommandHistory(pid, to!Type(cmd[0]), cmd[1].dup, cmd[2].dup);

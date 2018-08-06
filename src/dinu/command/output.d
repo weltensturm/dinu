@@ -20,7 +20,7 @@ shared immutable class CommandOutput: Command {
 		return idx*1000;
 	}
 
-	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+	override int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
 		/+
 		if(!command.length && pid in running)
 			command = running[pid].text;

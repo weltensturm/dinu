@@ -15,19 +15,29 @@ class ResultWindow: ws.wm.Window {
 	double selectCurrent = 0;
 	long lastUpdate;
 
+	//GlContext context;
+
 	this(){
 		super(1.4.em*15, 500, "dinu results", true);
-		draw.setFont(options.font, 14);
+		draw.setFont(options.font, 12);
+		//context.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		//context.enable(GL_BLEND);
+	}
+
+	/+
+	override void drawInit(){
+		context = new GlContext(windowHandle);
+		draw = new GlDraw(context);
+	}
+	+/
+
+	override void resized(int[2] size){
+		super.resized(size);
+		onDraw;
 	}
 
 	void update(WindowMain windowMain){
 		matches = commandBuilder.results;
-		if(!matches.length && !hidden)
-			hide;
-		else if(matches.length && hidden)
-			show;
-		if(hidden)
-			return;
 		auto targetHeight = min(15, matches.length)*1.4.em+0.3.em;
 		int targetWidth;
 		foreach(match; matches){
@@ -41,6 +51,12 @@ class ResultWindow: ws.wm.Window {
 		targetX += draw.width(commandBuilder.finishedPart);
 		if(pos != [targetX, windowMain.size.y+windowMain.pos.y])
 			move([targetX, windowMain.size.y+windowMain.pos.y]);
+		if(!matches.length && !hidden)
+			hide;
+		else if(matches.length && hidden)
+			show;
+		if(hidden)
+			return;
 
 		auto cur = (now*1000).lround;
 		auto delta = cur - lastUpdate;
@@ -62,7 +78,7 @@ class ResultWindow: ws.wm.Window {
 			return;
 		auto padding = 0.4.em;
 		auto entryHeight = 1.4.em;
-		auto textOffset = ((entryHeight - draw.to!XDraw.font.h)/2.0).lround.to!int;
+		auto textOffset = ((entryHeight - draw.fontHeight)/2.0).lround.to!int;
 		draw.setColor(options.colorBg);
 		draw.rect([0,0], size);
 		if(selectCurrent < 0 && (commandBuilder.command.length==1)){
@@ -75,7 +91,7 @@ class ResultWindow: ws.wm.Window {
 		foreach(int i, result; matches[start.min($-1).max(0)..min($, start+16)]){
 			int x = padding;
 			int y = cast(int)(size.h - entryHeight*(i-(scrollCurrent-start)) - entryHeight);
-			x += result.data[0].draw(draw.to!XDraw, [x, y+textOffset], start+i == commandBuilder.selected, result.positions);
+			x += result.data[0].draw(draw, [x, y+textOffset], start+i == commandBuilder.selected, result.positions);
 			auto hint = result.data[0].hint;
 			debug(Score){
 				hint = result.score.to!string;

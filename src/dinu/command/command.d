@@ -72,7 +72,7 @@ shared immutable class Command {
 	void run(){ run(parameter); };
 	abstract void run(string);
 
-	int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+	int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
 		int origX = pos.x;
 
 		foreach(p; positions){

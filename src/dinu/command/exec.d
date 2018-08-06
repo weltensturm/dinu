@@ -33,7 +33,7 @@ shared immutable class CommandExec: Command {
 		return 8;
 	}
 
-	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+	override int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
 		foreach(hit; positions){
 			auto p = hit - (filterText.length - text.length);
 			if(p < text.length){

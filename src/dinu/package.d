@@ -4,7 +4,8 @@ public import
 	core.thread,
 	core.sys.posix.sys.stat,
 	core.runtime,
-
+	core.atomic,
+	
 	std.conv,
 	std.uni,
 	std.regex,
@@ -37,8 +38,11 @@ public import
 	ws.bindings.xft,
 	ws.wm,
 	ws.gui.input,
+	ws.draw,
 	ws.x.draw,
-	
+	ws.gl.draw,
+	ws.gl.gl,
+	ws.gl.context,
 	dinu.main,
 	dinu.mainWindow,
 	dinu.resultWindow,

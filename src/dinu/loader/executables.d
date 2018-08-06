@@ -18,24 +18,29 @@ class ExecutablesLoader: ChoiceLoader {
 		add(new immutable CommandSpecial("cd"));
 		add(new immutable CommandSpecial("clear"));
 		add(new immutable CommandSpecial("."));
-		auto p = pipeShell("compgen -ack -A function", Redirect.stdout);
+		
+		auto execs = pipeShell("compgen -ack -A function", Redirect.stdout).stdout.byLineCopy.array;
+		
 		auto desktops = getAll;
-		iterexecs:foreach(line; p.stdout.byLine){
-			if(ignored.canFind(line))
+
+		string[] ignoreExecs;
+
+		foreach(desktop; getAll){
+			auto executable = desktop.exec;
+			foreach(c; "fFuU")
+				executable = executable.replace("%" ~ c, "").strip;
+			if(!executable.length)
 				continue;
-			foreach(match; desktops.find!((a,b)=>a.exec==b)(line)){
-				add(new immutable CommandDesktop([match.name, match.exec ~ " %U"].bangJoin));
-				match.name = "";
-				continue iterexecs;
-			}
-			add(new immutable CommandExec(line.to!string));
-		}
-		foreach(desktop; desktops){
-			if(desktop.name.length)
-				add(new immutable CommandDesktop([desktop.name, desktop.exec].bangJoin));
+			ignoreExecs ~= executable;
+			add(new immutable CommandDesktop([desktop.name, executable].bangJoin));
 		}
 
-		p.pid.wait;
+		foreach(executable; execs){
+			if(!executable.length || ignored.canFind(executable) || ignoreExecs.canFind(executable))
+				continue;
+			add(new immutable CommandExec(executable));
+		}
+
 	}
 
 }

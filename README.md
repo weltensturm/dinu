@@ -27,7 +27,9 @@ usage
 * `<S-Enter>` to execute and show output
 * `<C-Enter>` to execute and keep current filter
 * Run `cd "path"` to change directory
-* `<Escape>`, `<C-Q>` or `<Enter>` in empty prompt to quit
+* `<Escape>` or `<C-Q>` in empty prompt to quit
 
-
+contributing
+------------
+Development happens on branch `dev`, please use it as pull request target.
 

@@ -44,7 +44,7 @@ shared immutable class CommandHistory: Command {
 		//return commandBuilder.text.length ? command.score : 20 + running[pid].occurrences;
 	}
 
-	override int draw(XDraw draw, int[2] pos, bool selected, immutable(int)[] positions){
+	override int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
 		auto origX = pos.x;
 		/+
 		if(auto r = (pid in running)){

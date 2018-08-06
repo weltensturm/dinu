@@ -2,6 +2,7 @@ module dinu.filter;
 
 import
 	core.thread,
+	core.atomic,
 	std.conv,
 	std.parallelism,
 	std.string,
@@ -134,7 +135,7 @@ class FuzzyFilter(T) {
 				if(!filter.startsWith(".") && (p.text.startsWith(".") || p.filterText.canFind("/."))){
 					match.score = 1.min(match.score-100);
 				}
-				match.score += p.score;
+				match.score.atomicOp!"+="(p.score);
 				match.data = [p];
 				foreach(i, e; matches){
 					if(restart)
