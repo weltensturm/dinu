@@ -32,7 +32,7 @@ shared immutable class CommandDesktop: Command {
 	}
 
 	override size_t score(){
-		return 11;
+		return 12;
 	}
 
 	override string filterText(){

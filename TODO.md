@@ -1,6 +1,6 @@
 
 ### general behavior
-* add OpenGL switch
+* add OpenGL switch (need harfbuzz first)
 * allow search for multiple (separate) tokens
 * use sqlite instead of files
 * separate into gui and backend? (for use as library)

@@ -7,52 +7,57 @@ import dinu;
 __gshared:
 
 
+auto normalizePath(string path){
+	return path
+		.unixClean
+		.expandTilde
+		.absolutePath;
+}
+
+
 class FilesLoader: ChoiceLoader {
 
 	string path;
 	int depth;
-	bool delegate(string) dirCompleted;
+	string[] loadedDirs;
 
-	this(string path, int depth, bool delegate(string) dirCompleted){
+	this(string path, int depth){
 		this.path = path;
 		this.depth = depth;
-		this.dirCompleted = dirCompleted;
 		super();
 	}
 
 	override void run(){
-		loadDir(path);
+		loadDir(path, depth);
 	}
 
-	private void loadDir(string path){
-		auto dirs = [path];
-		for(int i=0; i<dirs.length; i++){
-			if(!active)
-				return;
-			dirs ~= loadFiles(dirs[i], 1);
+	private void loadDir(string path, size_t depth=0){
+		auto dirs = loadFiles(path);
+		if(depth > 0){
+			foreach(dir; dirs){
+				loadDir(dir, depth-1);
+			}
 		}
 	}
 
-	private string[] loadFiles(string dir, int depth){
+	private string[] loadFiles(string dir){
 		dir = dir
-			.unixClean
-			.expandTilde
-			.absolutePath
+			.normalizePath
 			.chomp("/") ~ "/";
-		if(dirCompleted(dir))
-			return [];
+		synchronized(this){
+			if(loadedDirs.canFind(dir))
+				return [];
+			loadedDirs ~= dir;
+		}
 		string[] dirs;
 		foreach(i, entry; dir.dirContent){
 			if(!active)
 				return [];
-			string path = entry
-				.expandTilde
-				.buildNormalizedPath
-				.unixClean;
+			string path = entry.normalizePath;
 			if(path.isSymlink)
 				continue;
 			try{
-				if(entry.isDir){
+				if(path.isDir){
 					dirs ~= path;
 					add(new immutable CommandDir(path));
 				}else{
@@ -69,11 +74,21 @@ class FilesLoader: ChoiceLoader {
 		return dirs;
 	}
 
-	void postLoad(string path, int depth){
-		task({
-			loadDir(path);
-		}).executeInNewThread;
+	void update(dstring filterText){
+		auto path = filterText.to!string.normalizePath;
+		if(path.chompAll("/").length != path.length-1)
+			return;
+		if(path.exists && path.isDir){
+			task({
+				loadDir(path);
+			}).executeInNewThread;
+		}
 	}
 
 }
 
+auto chompAll(string text, string delim){
+	while(text.endsWith(delim))
+		text = text.chomp(delim);
+	return text;
+}

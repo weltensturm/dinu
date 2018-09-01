@@ -279,8 +279,11 @@ class WindowMain: ws.wm.Window {
                                     }else
                                         commandBuilder.select(commandBuilder.selected-1);
                                     return;
-            case XK_Page_Up:		commandBuilder.select(commandBuilder.selected-options.lines); break;
-            case XK_Page_Down:		commandBuilder.select(commandBuilder.selected+options.lines); break;
+            case XK_Page_Up:		commandBuilder.select(commandBuilder.selected-15);
+                                    if(commandBuilder.selected < 0)
+                                        showOutput;
+                                    break;
+            case XK_Page_Down:		commandBuilder.select(commandBuilder.selected+15); break;
             case XK_Return:
             case XK_KP_Enter:
                                     commandBuilder.run(!control);

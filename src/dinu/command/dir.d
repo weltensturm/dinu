@@ -13,8 +13,8 @@ shared immutable class CommandDir: CommandFile {
 		super(Type.directory, name, true);
 	}
 
-	override string filterText(){
-		return super.filterText ~ "/";
+	override string text(){
+		return parts.join("/").chomp("/");
 	}
 
 	override size_t score(){

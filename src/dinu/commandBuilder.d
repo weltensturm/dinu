@@ -173,7 +173,7 @@ class CommandBuilder {
 		scannedDirs = [];
 		if(filesLoader)
 			filesLoader.stop;
-		filesLoader = new FilesLoader(getcwd, 2, &dirLoaded);
+		filesLoader = new FilesLoader(getcwd, 2);
 		filesLoader.each((c){
 			if(c.type == Type.directory){
 				synchronized(this){
@@ -408,10 +408,7 @@ class CommandBuilder {
 		if(s.endsWith("-", "="))
 			checkNativeCompletions;
 
-		auto dir = text.to!string.expandTilde.buildNormalizedPath.unixClean;
-		if(dir.exists && dir.isDir && !scannedDirs.canFind(dir)){
-			filesLoader.postLoad(dir, 0);
-		}
+		filesLoader.update(text);
 
 	}
 
@@ -485,17 +482,5 @@ class CommandBuilder {
 			return command.fold!"a ~ ' ' ~ b".to!string;
 		return "";
 	}
-
-	protected:
-
-		bool dirLoaded(string s){
-			synchronized(this){
-				if(scannedDirs.canFind(s))
-					return true;
-				scannedDirs ~= s;
-				return false;
-			}
-		}
-
 
 }

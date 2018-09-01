@@ -132,7 +132,7 @@ class FuzzyFilter(T) {
 				match.positions = res[1..$].idup;
 			}
 			if(match.score > 0){
-				if(!filter.startsWith(".") && (p.text.startsWith(".") || p.filterText.canFind("/."))){
+				if(!filter.startsWith(".") && (p.filterText.startsWith(".") || p.filterText.canFind("/."))){
 					match.score = 1.min(match.score-100);
 				}
 				match.score.atomicOp!"+="(p.score);

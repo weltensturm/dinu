@@ -69,7 +69,7 @@ shared immutable class Command {
 		return 0;
 	}
 
-	void run(){ run(parameter); };
+	void run(){ run(parameter); }
 	abstract void run(string);
 
 	int draw(DrawEmpty draw, int[2] pos, bool selected, immutable(int)[] positions){
@@ -86,7 +86,8 @@ shared immutable class Command {
 		draw.setColor(color);
 		pos.x += draw.text(pos, text, 0);
 		draw.setColor(colorInput);
-		pos.x += draw.text(pos, ' ' ~ parameter, 0);
+		if(parameter.length)
+			pos.x += draw.text(pos, ' ' ~ parameter, 0);
 		return pos.x-origX;
 	}
 
