@@ -40,12 +40,7 @@ shared immutable class CommandDesktop: Command {
 	}
 
 	override void run(string parameter){
-		this.spawnCommand(
-				exec.replace("%f", parameter)
-					.replace("%F", parameter)
-					.replace("%u", parameter)
-					.replace("%U", parameter)
-		);
+		this.spawnCommand(exec, parameter);
 	}
 
 	override void spawnCommand(string command, string arguments=""){
