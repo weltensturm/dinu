@@ -224,6 +224,8 @@ struct Options {
 	@("-cde") float[3] colorDesktop = "#bdddff".color;
 	@("-cde") float[3] colorWindow = "#ffdd88".color;
 
+    @("-dd") int directoryDepth = -1;
+
 }
 
 

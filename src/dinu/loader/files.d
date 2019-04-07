@@ -22,6 +22,8 @@ class FilesLoader: ChoiceLoader {
 	string[] loadedDirs;
 
 	this(string path, int depth){
+		if(depth == -1)
+			depth = 9999;
 		this.path = path;
 		this.depth = depth;
 		super();
