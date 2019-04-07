@@ -173,7 +173,7 @@ class CommandBuilder {
 		scannedDirs = [];
 		if(filesLoader)
 			filesLoader.stop;
-		filesLoader = new FilesLoader(getcwd, 2);
+		filesLoader = new FilesLoader(getcwd, options.directoryDepth);
 		filesLoader.each((c){
 			if(c.type == Type.directory){
 				synchronized(this){
@@ -417,6 +417,7 @@ class CommandBuilder {
 		resetChoices;
 		select(-1);
 		checkNativeCompletions;
+		filesLoader.update(text);
 	}
 
 	void deleteSelection(){
@@ -432,6 +433,7 @@ class CommandBuilder {
 			deleteSelection;
 		resetFilter;
 		checkNativeCompletions;
+		filesLoader.update(text);
 	}
 
 	void delBackChar(){
@@ -449,6 +451,7 @@ class CommandBuilder {
 		cursorStart = cursor;
 		resetFilter;
 		checkNativeCompletions;
+		filesLoader.update(text);
 	}
 
 	void deleteWordLeft(){
@@ -462,6 +465,7 @@ class CommandBuilder {
 		cursorStart = cursor;
 		resetFilter;
 		checkNativeCompletions;
+		filesLoader.update(text);
 	}
 
 	void deleteWordRight(){
@@ -469,6 +473,7 @@ class CommandBuilder {
 		text.deleteWordRight(cursor);
 		resetFilter;
 		checkNativeCompletions;
+		filesLoader.update(text);
 	}
 
 	override string toString(){

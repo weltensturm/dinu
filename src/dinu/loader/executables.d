@@ -19,13 +19,13 @@ class ExecutablesLoader: ChoiceLoader {
 		add(new immutable CommandSpecial("clear"));
 		add(new immutable CommandSpecial("."));
 		
-		auto execs = pipeShell("compgen -ack -A function", Redirect.stdout).stdout.byLineCopy.array;
-		
+		auto execs = pipeShell("compgen -ack -A function | sort -u", Redirect.stdout);
+
 		auto desktops = getAll;
 
 		string[] ignoreExecs;
 
-		foreach(desktop; getAll){
+		foreach(desktop; desktops){
 			auto executable = desktop.exec;
 			foreach(c; "fFuU")
 				executable = executable.replace("%" ~ c, "").strip;
@@ -35,7 +35,7 @@ class ExecutablesLoader: ChoiceLoader {
 			add(new immutable CommandDesktop([desktop.name, executable].bangJoin));
 		}
 
-		foreach(executable; execs){
+		foreach(executable; execs.stdout.byLineCopy){
 			if(!executable.length || ignored.canFind(executable) || ignoreExecs.canFind(executable))
 				continue;
 			add(new immutable CommandExec(executable));
