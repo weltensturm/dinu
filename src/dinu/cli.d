@@ -19,7 +19,7 @@ void fill(T)(ref T object, string[] args){
 				if(member != "-" ~ attr)
 					settersBool["--" ~ member] = settersBool[attr];
 			}else{
-				static if(is(typeof(mixin("object."~member)) == float[3]))
+				static if(is(typeof(mixin("object."~member)) == float[4]))
 					setters[attr] = (string s){ mixin("object." ~ member ~ " = s.color;"); };
 				else
 					setters[attr] = (string s){ mixin("object." ~ member ~ " = s.to!(typeof(T." ~ member ~ "));"); };

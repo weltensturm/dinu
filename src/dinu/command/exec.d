@@ -16,7 +16,7 @@ shared immutable class CommandExec: Command {
 		parts = name.chompPrefix(getcwd ~ "/").split('/');
 	}
 
-	this(Type type, string name, float[3] color){
+	this(Type type, string name, float[4] color){
 		super(type, name, color);
 		parts = [name];
 	}

@@ -76,6 +76,7 @@ class ResultWindow: ws.wm.Window {
 	override void onDraw(){
 		if(hidden)
 			return;
+		draw.clear;
 		auto padding = 0.4.em;
 		auto entryHeight = 1.4.em;
 		auto textOffset = ((entryHeight - draw.fontHeight)/2.0).lround.to!int;

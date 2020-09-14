@@ -209,20 +209,20 @@ struct Options {
 
 	@("-f") bool flatman;
 
-	@("-cb") float[3] colorBg = "#222222".color;
-	@("-ci") float[3] colorInput = "#ffffff".color;
-	@("-cib") float[3] colorInputBg = "#454545".color;
-	@("-co") float[3] colorOutput = "#eeeeee".color;
-	@("-cob") float[3] colorOutputBg = "#111111".color;
-	@("-ce") float[3] colorError = "#ff7777".color;
-	@("-cs") float[3] colorSelected = "#005577".color;
-	@("-ch") float[3] colorHint = "#999999".color;
-	@("-chb") float[3] colorHintBg = "#444444".color;
-	@("-cd") float[3] colorDir = "#bbeebb".color;
-	@("-cf") float[3] colorFile = "#eeeeee".color;
-	@("-ce") float[3] colorExec = "#bbbbff".color;
-	@("-cde") float[3] colorDesktop = "#bdddff".color;
-	@("-cde") float[3] colorWindow = "#ffdd88".color;
+	@("-cb") float[4] colorBg = "#000000dd".color;
+	@("-ci") float[4] colorInput = "#ffffff".color;
+	@("-cib") float[4] colorInputBg = "#454545".color;
+	@("-co") float[4] colorOutput = "#eeeeee".color;
+	@("-cob") float[4] colorOutputBg = "#111111".color;
+	@("-ce") float[4] colorError = "#ff7777".color;
+	@("-cs") float[4] colorSelected = "#005577".color;
+	@("-ch") float[4] colorHint = "#999999".color;
+	@("-chb") float[4] colorHintBg = "#444444".color;
+	@("-cd") float[4] colorDir = "#bbeebb".color;
+	@("-cf") float[4] colorFile = "#eeeeee".color;
+	@("-ce") float[4] colorExec = "#bbbbff".color;
+	@("-cde") float[4] colorDesktop = "#bdddff".color;
+	@("-cde") float[4] colorWindow = "#ffdd88".color;
 
     @("-dd") int directoryDepth = -1;
 

@@ -136,6 +136,7 @@ class WindowMain: ws.wm.Window {
         assert(thread_isMainThread);
 
         int separator = (size.w*options.ratio).to!int;
+        draw.clear;
         drawOutput([0, size.h-1.em*options.lines], [size.w, 1.em*options.lines], separator);
         drawInput([0, 0], [size.w, size.h-1.em*options.lines], separator);
         super.onDraw;

@@ -22,10 +22,13 @@ string tabsToSpaces(string text, int spaces=4){
 	return result;
 }
 
-float[3] color(string text){
+float[4] color(string text){
+	while(text.length <= 8)
+		text ~= 'f';
 	return [
 		text[1..3].to!int(16)/255.0,
 		text[3..5].to!int(16)/255.0,
-		text[5..7].to!int(16)/255.0
+		text[5..7].to!int(16)/255.0,
+		text[7..9].to!int(16)/255.0
 	];
 }

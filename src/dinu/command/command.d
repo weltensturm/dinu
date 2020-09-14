@@ -28,8 +28,8 @@ shared immutable class Command {
 
 	string name;
 	Type type;
-	float[3] color;
-	float[3] colorInput;
+	float[4] color;
+	float[4] colorInput;
 	string parameter;
 
 	protected this(Type type, string name, string parameter = ""){
@@ -40,9 +40,12 @@ shared immutable class Command {
 		colorInput = options.colorInput;
 	}
 
-	protected this(Type type, string name, float[3] color, string parameter = ""){
-		this(type, name, parameter);
+	protected this(Type type, string name, float[4] color, string parameter = ""){
+		this.type = type;
+		this.name = name;
+		this.parameter = parameter;
 		this.color = color;
+		colorInput = options.colorInput;
 	}
 
 	string serialize(){
