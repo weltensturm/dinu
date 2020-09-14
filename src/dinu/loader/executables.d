@@ -40,7 +40,8 @@ class ExecutablesLoader: ChoiceLoader {
 				continue;
 			add(new immutable CommandExec(executable));
 		}
-
+		execs.pid.kill;
+		execs.pid.wait;
 	}
 
 }

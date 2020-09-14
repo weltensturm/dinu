@@ -51,8 +51,8 @@ class OutputLoader: ChoiceLoader {
 			if(idx==0 || !active)
 				break;
 		}
-		scope(exit)
-			p.pid.kill;
+		p.pid.kill;
+		p.pid.wait;
 	}
 
 	void loadBackwardsExec(size_t idx){
@@ -64,8 +64,8 @@ class OutputLoader: ChoiceLoader {
 			if(idx==0 || !active)
 				break;
 		}
-		scope(exit)
-			p.pid.kill;
+		p.pid.kill;
+		p.pid.wait;
 	}
 
 	void matchLine(string line, size_t idx){
